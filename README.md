@@ -194,7 +194,8 @@ The system uses CQRS (Command Query Responsibility Segregation) to separate writ
 6. Return response to client
 ```
 
-**Why CQRS?** Initially, I just had a simple CRUD application. But as requirements grew (analytics, reporting, audit trails), CQRS made perfect sense. It allows us to optimize each side independently.
+**Why CQRS?** Initially, I just had a simple CRUD application. But as requirements grew (analytics, reporting, audit trails),  
+CQRS made perfect sense. It allows us to optimize each side independently.
 
 ### Documentation with Swagger
 The application uses Swagger for API documentation. Access it at:
@@ -207,9 +208,9 @@ http://localhost:8083/api/v1/swagger-ui/index.html
 ### Monitoring
 
 The application exposes metrics via Spring Actuator:
-http://localhost:8082/actuator/health
-http://localhost:8082/actuator/metrics
-http://localhost:8083/actuator/health
-http://localhost:8083/actuator/metrics
+http://localhost:8082/actuator/health  
+http://localhost:8082/actuator/metrics  
+http://localhost:8083/actuator/health  
+http://localhost:8083/actuator/metrics  
 
  

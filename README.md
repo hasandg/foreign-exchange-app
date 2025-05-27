@@ -153,7 +153,6 @@ The bulk processing feature uses Spring Batch with some custom optimizations:
 - Chunk-based processing (configurable batch size)
 - Error handling and skip logic
 - Progress tracking via REST API
-- Automatic cleanup of processed files
 
 ## CQRS Implementation
 

@@ -16,7 +16,7 @@ A microservices-based currency conversion system built with Spring Boot, impleme
 
 The system follows a microservices architecture with clear separation of concerns:
 
-[![Architecture Diagram](https://raw.githubusercontent.com/hasandg/foreign-exchange-app/main/infrastructure/architecture-diagram.png)](https://raw.githubusercontent.com/hasandg/foreign-exchange-app/main/infrastructure/architecture-diagram.png) 
+[![Architecture Diagram](https://github.com/hasandg/foreign-exchange-app/blob/main/ForeignExchangeApplicationDiagram.png)](https://github.com/hasandg/foreign-exchange-app/blob/main/ForeignExchangeApplicationDiagram.png) 
 
 ## Quick Start
 

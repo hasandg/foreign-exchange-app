@@ -29,6 +29,17 @@ spring:
                 fallbackUri: forward:/fallback/conversions
             - RewritePath=/api/v1/conversions/(?<segment>.*), /api/v1/conversions/$\{segment}
 
+        - id: batch-service
+          uri: ${CONVERSION_SERVICE_URL:http://currency-conversion-service:8082}
+          predicates:
+            - Path=/api/v1/batch/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: batchService
+                fallbackUri: forward:/fallback/conversions
+            - RewritePath=/api/v1/batch/(?<segment>.*), /api/v1/batch/$\{segment}
+
 resilience4j:
   circuitbreaker:
     configs:

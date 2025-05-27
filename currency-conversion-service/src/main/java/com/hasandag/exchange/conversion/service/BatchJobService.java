@@ -68,19 +68,15 @@ public class BatchJobService {
         Map<String, Object> response = new HashMap<>();
         
         try {
-            // Use Spring Batch's built-in JobExplorer instead of raw SQL
             List<String> jobNames = jobExplorer.getJobNames();
             List<Map<String, Object>> allJobs = new java.util.ArrayList<>();
             
             for (String jobName : jobNames) {
-                // Get job instances for each job name (latest 50)
                 List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, 50);
                 
                 for (JobInstance jobInstance : jobInstances) {
-                    // Get all executions for this instance
                     List<JobExecution> jobExecutions = jobExplorer.getJobExecutions(jobInstance);
                     
-                    // Add each execution to the result
                     for (JobExecution jobExecution : jobExecutions) {
                         Map<String, Object> jobInfo = new HashMap<>();
                         jobInfo.put("job_execution_id", jobExecution.getId());
@@ -92,11 +88,10 @@ public class BatchJobService {
                         jobInfo.put("create_time", jobExecution.getCreateTime());
                         jobInfo.put("exit_code", jobExecution.getExitStatus().getExitCode());
                         
-                        // Add job parameters for context
                         Map<String, Object> parameters = new HashMap<>();
                         if (jobExecution.getJobParameters() != null) {
                             jobExecution.getJobParameters().getParameters().forEach((key, value) -> {
-                                if (!"file.content".equals(key)) { // Exclude large content
+                                if (!"file.content".equals(key)) {
                                     parameters.put(key, value.getValue());
                                 }
                             });
@@ -108,13 +103,11 @@ public class BatchJobService {
                 }
             }
             
-            // Sort by execution ID descending (most recent first)
             allJobs.sort((a, b) -> Long.compare(
                 (Long) b.get("job_execution_id"), 
                 (Long) a.get("job_execution_id")
             ));
             
-            // Limit to 50 most recent
             List<Map<String, Object>> limitedJobs = allJobs.stream()
                     .limit(50)
                     .collect(java.util.stream.Collectors.toList());
@@ -147,7 +140,6 @@ public class BatchJobService {
                 return response;
             }
 
-            // Store file content in memory instead of saving to disk
             String fileContent = new String(file.getBytes(), "UTF-8");
             
             org.springframework.batch.core.JobParameters jobParameters = createJobParameters(file, fileContent);
@@ -168,6 +160,151 @@ public class BatchJobService {
         } catch (Exception e) {
             return handleJobException(e);
         }
+    }
+
+    public Map<String, Object> getJobsByName(String jobName, int page, int size) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            int start = page * size;
+            List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, start, size);
+            List<Map<String, Object>> jobs = new java.util.ArrayList<>();
+            
+            for (JobInstance jobInstance : jobInstances) {
+                List<JobExecution> jobExecutions = jobExplorer.getJobExecutions(jobInstance);
+                
+                for (JobExecution jobExecution : jobExecutions) {
+                    Map<String, Object> jobInfo = createJobInfoMap(jobExecution, jobInstance);
+                    jobs.add(jobInfo);
+                }
+            }
+            
+            int totalCount = (int) jobExplorer.getJobInstanceCount(jobName);
+            
+            response.put("jobs", jobs);
+            response.put("totalJobs", totalCount);
+            response.put("currentPage", page);
+            response.put("pageSize", size);
+            response.put("totalPages", (int) Math.ceil((double) totalCount / size));
+            
+            return response;
+            
+        } catch (Exception e) {
+            log.error("Error retrieving jobs by name: {}", jobName, e);
+            response.put("error", "Error retrieving jobs: " + e.getMessage());
+            return response;
+        }
+    }
+
+    public Map<String, Object> getRunningJobs() {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            List<String> jobNames = jobExplorer.getJobNames();
+            List<Map<String, Object>> runningJobs = new java.util.ArrayList<>();
+            
+            for (String jobName : jobNames) {
+                Set<JobExecution> runningExecutions = jobExplorer.findRunningJobExecutions(jobName);
+                
+                for (JobExecution jobExecution : runningExecutions) {
+                    Map<String, Object> jobInfo = createJobInfoMap(jobExecution, jobExecution.getJobInstance());
+                    runningJobs.add(jobInfo);
+                }
+            }
+            
+            response.put("runningJobs", runningJobs);
+            response.put("count", runningJobs.size());
+            
+            return response;
+            
+        } catch (Exception e) {
+            log.error("Error retrieving running jobs", e);
+            response.put("error", "Error retrieving running jobs: " + e.getMessage());
+            return response;
+        }
+    }
+
+    public Map<String, Object> getJobStatistics() {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            List<String> jobNames = jobExplorer.getJobNames();
+            Map<String, Object> statistics = new HashMap<>();
+            
+            for (String jobName : jobNames) {
+                Map<String, Object> jobStats = new HashMap<>();
+                
+                int totalInstances = (int) jobExplorer.getJobInstanceCount(jobName);
+                jobStats.put("totalInstances", totalInstances);
+                
+                Set<JobExecution> runningExecutions = jobExplorer.findRunningJobExecutions(jobName);
+                jobStats.put("runningCount", runningExecutions.size());
+                
+                List<JobInstance> recentInstances = jobExplorer.getJobInstances(jobName, 0, 100);
+                int completedCount = 0;
+                int failedCount = 0;
+                
+                for (JobInstance instance : recentInstances) {
+                    List<JobExecution> executions = jobExplorer.getJobExecutions(instance);
+                    if (!executions.isEmpty()) {
+                        JobExecution latestExecution = executions.get(executions.size() - 1);
+                        switch (latestExecution.getStatus()) {
+                            case COMPLETED -> completedCount++;
+                            case FAILED -> failedCount++;
+                        }
+                    }
+                }
+                
+                jobStats.put("completedCount", completedCount);
+                jobStats.put("failedCount", failedCount);
+                
+                statistics.put(jobName, jobStats);
+            }
+            
+            response.put("statistics", statistics);
+            response.put("totalJobTypes", jobNames.size());
+            
+            return response;
+            
+        } catch (Exception e) {
+            log.error("Error retrieving job statistics", e);
+            response.put("error", "Error retrieving job statistics: " + e.getMessage());
+            return response;
+        }
+    }
+
+    private Map<String, Object> createJobInfoMap(JobExecution jobExecution, JobInstance jobInstance) {
+        Map<String, Object> jobInfo = new HashMap<>();
+        jobInfo.put("job_execution_id", jobExecution.getId());
+        jobInfo.put("job_instance_id", jobInstance.getInstanceId());
+        jobInfo.put("job_name", jobInstance.getJobName());
+        jobInfo.put("status", jobExecution.getStatus().toString());
+        jobInfo.put("start_time", jobExecution.getStartTime());
+        jobInfo.put("end_time", jobExecution.getEndTime());
+        jobInfo.put("create_time", jobExecution.getCreateTime());
+        jobInfo.put("exit_code", jobExecution.getExitStatus().getExitCode());
+        
+        Map<String, Object> parameters = new HashMap<>();
+        if (jobExecution.getJobParameters() != null) {
+            jobExecution.getJobParameters().getParameters().forEach((key, value) -> {
+                if (!"file.content".equals(key)) {
+                    parameters.put(key, value.getValue());
+                }
+            });
+        }
+        jobInfo.put("parameters", parameters);
+        
+        Map<String, Object> progress = new HashMap<>();
+        for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
+            progress.put("readCount", stepExecution.getReadCount());
+            progress.put("writeCount", stepExecution.getWriteCount());
+            progress.put("commitCount", stepExecution.getCommitCount());
+            progress.put("skipCount", stepExecution.getSkipCount());
+            break;
+        }
+        jobInfo.put("progress", progress);
+        
+        return jobInfo;
     }
 
     private boolean isValidFile(org.springframework.web.multipart.MultipartFile file) {
@@ -208,168 +345,5 @@ public class BatchJobService {
         }
         
         return response;
-    }
-
-    /**
-     * Get jobs by job name using Spring Batch's built-in API
-     */
-    public Map<String, Object> getJobsByName(String jobName, int page, int size) {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            int start = page * size;
-            List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, start, size);
-            List<Map<String, Object>> jobs = new java.util.ArrayList<>();
-            
-            for (JobInstance jobInstance : jobInstances) {
-                List<JobExecution> jobExecutions = jobExplorer.getJobExecutions(jobInstance);
-                
-                for (JobExecution jobExecution : jobExecutions) {
-                    Map<String, Object> jobInfo = createJobInfoMap(jobExecution, jobInstance);
-                    jobs.add(jobInfo);
-                }
-            }
-            
-            // Get total count for pagination
-            int totalCount = (int) jobExplorer.getJobInstanceCount(jobName);
-            
-            response.put("jobs", jobs);
-            response.put("totalJobs", totalCount);
-            response.put("currentPage", page);
-            response.put("pageSize", size);
-            response.put("totalPages", (int) Math.ceil((double) totalCount / size));
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving jobs by name: {}", jobName, e);
-            response.put("error", "Error retrieving jobs: " + e.getMessage());
-            return response;
-        }
-    }
-
-    /**
-     * Get running jobs using Spring Batch's built-in API
-     */
-    public Map<String, Object> getRunningJobs() {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            List<String> jobNames = jobExplorer.getJobNames();
-            List<Map<String, Object>> runningJobs = new java.util.ArrayList<>();
-            
-            for (String jobName : jobNames) {
-                Set<JobExecution> runningExecutions = jobExplorer.findRunningJobExecutions(jobName);
-                
-                for (JobExecution jobExecution : runningExecutions) {
-                    Map<String, Object> jobInfo = createJobInfoMap(jobExecution, jobExecution.getJobInstance());
-                    runningJobs.add(jobInfo);
-                }
-            }
-            
-            response.put("runningJobs", runningJobs);
-            response.put("count", runningJobs.size());
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving running jobs", e);
-            response.put("error", "Error retrieving running jobs: " + e.getMessage());
-            return response;
-        }
-    }
-
-    /**
-     * Get job statistics using Spring Batch's built-in API
-     */
-    public Map<String, Object> getJobStatistics() {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            List<String> jobNames = jobExplorer.getJobNames();
-            Map<String, Object> statistics = new HashMap<>();
-            
-            for (String jobName : jobNames) {
-                Map<String, Object> jobStats = new HashMap<>();
-                
-                // Get total instance count
-                int totalInstances = (int) jobExplorer.getJobInstanceCount(jobName);
-                jobStats.put("totalInstances", totalInstances);
-                
-                // Get running count
-                Set<JobExecution> runningExecutions = jobExplorer.findRunningJobExecutions(jobName);
-                jobStats.put("runningCount", runningExecutions.size());
-                
-                // Get recent instances for status analysis
-                List<JobInstance> recentInstances = jobExplorer.getJobInstances(jobName, 0, 100);
-                int completedCount = 0;
-                int failedCount = 0;
-                
-                for (JobInstance instance : recentInstances) {
-                    List<JobExecution> executions = jobExplorer.getJobExecutions(instance);
-                    if (!executions.isEmpty()) {
-                        JobExecution latestExecution = executions.get(executions.size() - 1);
-                        switch (latestExecution.getStatus()) {
-                            case COMPLETED -> completedCount++;
-                            case FAILED -> failedCount++;
-                        }
-                    }
-                }
-                
-                jobStats.put("completedCount", completedCount);
-                jobStats.put("failedCount", failedCount);
-                
-                statistics.put(jobName, jobStats);
-            }
-            
-            response.put("statistics", statistics);
-            response.put("totalJobTypes", jobNames.size());
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving job statistics", e);
-            response.put("error", "Error retrieving job statistics: " + e.getMessage());
-            return response;
-        }
-    }
-
-    /**
-     * Helper method to create job info map
-     */
-    private Map<String, Object> createJobInfoMap(JobExecution jobExecution, JobInstance jobInstance) {
-        Map<String, Object> jobInfo = new HashMap<>();
-        jobInfo.put("job_execution_id", jobExecution.getId());
-        jobInfo.put("job_instance_id", jobInstance.getInstanceId());
-        jobInfo.put("job_name", jobInstance.getJobName());
-        jobInfo.put("status", jobExecution.getStatus().toString());
-        jobInfo.put("start_time", jobExecution.getStartTime());
-        jobInfo.put("end_time", jobExecution.getEndTime());
-        jobInfo.put("create_time", jobExecution.getCreateTime());
-        jobInfo.put("exit_code", jobExecution.getExitStatus().getExitCode());
-        
-        // Add job parameters (excluding large content)
-        Map<String, Object> parameters = new HashMap<>();
-        if (jobExecution.getJobParameters() != null) {
-            jobExecution.getJobParameters().getParameters().forEach((key, value) -> {
-                if (!"file.content".equals(key)) { // Exclude large content
-                    parameters.put(key, value.getValue());
-                }
-            });
-        }
-        jobInfo.put("parameters", parameters);
-        
-        // Add progress information
-        Map<String, Object> progress = new HashMap<>();
-        for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
-            progress.put("readCount", stepExecution.getReadCount());
-            progress.put("writeCount", stepExecution.getWriteCount());
-            progress.put("commitCount", stepExecution.getCommitCount());
-            progress.put("skipCount", stepExecution.getSkipCount());
-            break; // Assuming single step job
-        }
-        jobInfo.put("progress", progress);
-        
-        return jobInfo;
     }
 } 

@@ -40,14 +40,12 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
     public void open(ExecutionContext executionContext) throws ItemStreamException {
         try {
             currentItemCount = executionContext.getInt(CURRENT_ITEM_COUNT, 0);
-
             log.debug("Current item count from execution context: {}", currentItemCount);
 
             if (fileContent == null || fileContent.trim().isEmpty()) {
                 throw new ItemStreamException("CSV file content is null or empty");
             }
 
-            // Parse CSV content from memory
             StringReader stringReader = new StringReader(fileContent);
             csvParser = CSVFormat.DEFAULT
                     .builder()
@@ -60,7 +58,6 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
             
             recordIterator = csvParser.iterator();
             
-            // Skip to the current position for restart capability
             for (int i = 0; i < currentItemCount; i++) {
                 if (recordIterator.hasNext()) {
                     recordIterator.next();
@@ -121,7 +118,6 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
     @Override
     public void update(ExecutionContext executionContext) throws ItemStreamException {
         executionContext.putInt(CURRENT_ITEM_COUNT, currentItemCount);
-        // Store original filename for context
         if (originalFilename != null) {
             executionContext.putString("original.filename", originalFilename);
         }

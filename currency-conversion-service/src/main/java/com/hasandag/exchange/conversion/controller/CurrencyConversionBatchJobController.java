@@ -1,13 +1,6 @@
 package com.hasandag.exchange.conversion.controller;
 
 import com.hasandag.exchange.conversion.service.BatchJobService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.*;
@@ -27,7 +20,6 @@ import java.util.Map;
 @RequestMapping("/api/v1/batch")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Batch Jobs", description = "Batch processing operations for currency conversions")
 public class CurrencyConversionBatchJobController {
 
     private final JobLauncher jobLauncher;
@@ -35,12 +27,6 @@ public class CurrencyConversionBatchJobController {
     private final BatchJobService batchJobService;
 
     @PostMapping("/conversions")
-    @Operation(summary = "Start a bulk conversion job", description = "Processes a file upload and starts a job")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Job started successfully", content = @Content(schema = @Schema(implementation = Map.class))),
-        @ApiResponse(responseCode = "400", description = "Bad request", content = @Content(schema = @Schema(implementation = Map.class))),
-        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = Map.class)))
-    })
     public ResponseEntity<Map<String, Object>> startBulkConversionJob(@RequestParam("file") MultipartFile file) {
         Map<String, Object> response = batchJobService.processFileUploadAndStartJob(file, jobLauncher, bulkConversionJob);
         
@@ -57,12 +43,6 @@ public class CurrencyConversionBatchJobController {
     }
 
     @GetMapping("/conversions/{jobId}/status")
-    @Operation(summary = "Get job status", description = "Retrieves the status of a job")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Job status retrieved successfully", content = @Content(schema = @Schema(implementation = Map.class))),
-        @ApiResponse(responseCode = "404", description = "Job not found"),
-        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = Map.class)))
-    })
     public ResponseEntity<Map<String, Object>> getJobStatus(@PathVariable Long jobId) {
         Map<String, Object> response = batchJobService.getJobStatus(jobId);
         
@@ -78,11 +58,6 @@ public class CurrencyConversionBatchJobController {
     }
 
     @GetMapping("/conversions/jobs")
-    @Operation(summary = "Get all jobs", description = "Retrieves a list of all jobs")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Jobs retrieved successfully", content = @Content(schema = @Schema(implementation = Map.class))),
-        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = Map.class)))
-    })
     public ResponseEntity<Map<String, Object>> getAllJobs() {
         Map<String, Object> response = batchJobService.getAllJobs();
         
@@ -94,18 +69,9 @@ public class CurrencyConversionBatchJobController {
     }
 
     @GetMapping("/conversions/jobs/{jobName}")
-    @Operation(summary = "Get jobs by name", description = "Retrieves paginated jobs filtered by job name")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Jobs retrieved successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid parameters"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
-    })
     public ResponseEntity<Map<String, Object>> getJobsByName(
-            @Parameter(description = "Job name to filter by", example = "bulkConversionJob")
             @PathVariable String jobName,
-            @Parameter(description = "Page number (0-based)", example = "0")
             @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size (max 100)", example = "10")
             @RequestParam(defaultValue = "10") int size) {
         
         if (size > 100) {
@@ -124,11 +90,6 @@ public class CurrencyConversionBatchJobController {
     }
 
     @GetMapping("/conversions/jobs/running")
-    @Operation(summary = "Get running jobs", description = "Retrieves all currently running batch jobs")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Running jobs retrieved successfully"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
-    })
     public ResponseEntity<Map<String, Object>> getRunningJobs() {
         Map<String, Object> response = batchJobService.getRunningJobs();
         
@@ -140,11 +101,6 @@ public class CurrencyConversionBatchJobController {
     }
 
     @GetMapping("/conversions/statistics")
-    @Operation(summary = "Get job statistics", description = "Retrieves statistical information about all batch jobs")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Statistics retrieved successfully"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
-    })
     public ResponseEntity<Map<String, Object>> getJobStatistics() {
         Map<String, Object> response = batchJobService.getJobStatistics();
         
@@ -156,23 +112,16 @@ public class CurrencyConversionBatchJobController {
     }
 
     @GetMapping("/conversions/health")
-    @Operation(summary = "Batch system health check", description = "Provides health status of the batch processing system")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Batch system is healthy"),
-        @ApiResponse(responseCode = "503", description = "Batch system is unhealthy")
-    })
     public ResponseEntity<Map<String, Object>> getBatchHealthStatus() {
         Map<String, Object> response = new java.util.HashMap<>();
         
         try {
-            // Get running jobs count
             Map<String, Object> runningJobsResponse = batchJobService.getRunningJobs();
             int runningCount = 0;
             if (!runningJobsResponse.containsKey("error")) {
                 runningCount = (Integer) runningJobsResponse.get("count");
             }
             
-            // Get statistics
             Map<String, Object> statsResponse = batchJobService.getJobStatistics();
             
             response.put("status", "UP");

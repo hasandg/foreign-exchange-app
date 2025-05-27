@@ -153,23 +153,6 @@ The bulk processing feature uses Spring Batch with some custom optimizations:
 - Progress tracking via REST API
 - Automatic cleanup of processed files
 
-## 🔧 Configuration
-
-### Environment Variables
-
-The application uses different profiles for different environments:
-
-**Local Development (default):**
-- Uses H2 for PostgreSQL (in-memory)
-- Uses embedded MongoDB
-- Kafka runs in Docker
-
-**Docker Environment:**
-```bash
-export SPRING_PROFILES_ACTIVE=docker
-export GLOBAL_NETWORK=exchange-network
-```
-
 ## CQRS Implementation
 
 The system uses CQRS (Command Query Responsibility Segregation) to separate write and read operations:

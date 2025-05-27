@@ -83,12 +83,6 @@ spring:
     jdbc:
       initialize-schema: never
       table-prefix: batch_
-  cache:
-    type: simple
-    cache-names:
-      - exchangeRates
-      - conversionHistory
-      - validationResults
   jackson:
     serialization:
       write-dates-as-timestamps: false

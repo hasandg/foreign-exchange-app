@@ -170,7 +170,7 @@ export SPRING_PROFILES_ACTIVE=docker
 export GLOBAL_NETWORK=exchange-network
 ```
 
-## 🎛️ CQRS Implementation
+## CQRS Implementation
 
 The system uses CQRS (Command Query Responsibility Segregation) to separate write and read operations:
 

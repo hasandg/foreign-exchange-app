@@ -119,13 +119,13 @@ curl -X POST http://localhost:8081/api/conversions \
 
 ### Bulk CSV Processing
 ```bash
-curl -X POST http://localhost:8081/api/conversions/bulk \
+curl -X POST http://localhost:8083/api/conversions/bulk \
   -F "file=@sample-conversions-100.csv"
 ```
 
 ### Check Job Status
 ```bash
-curl http://localhost:8081/api/batch/jobs/{jobId}/status
+curl http://localhost:8083/api/batch/jobs/{jobId}/status
 ```
 
 ## Sample Data

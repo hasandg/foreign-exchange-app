@@ -68,19 +68,19 @@ docker compose -f infrastructure/docker-compose/common.yml -f docker-compose.yml
 ```bash
 mvn clean install -DskipTests
 ```
-# Terminal 1 - Api Gateway
+##### Terminal 1 - Api Gateway
 ```bash
 cd api-gateway
 mvn spring-boot:run
 ```
 
-# Terminal 2 - Exchange Rate Service
+##### Terminal 2 - Exchange Rate Service
 ```bash
 cd exchange-rate-service
 mvn spring-boot:run
 ```
 
-# Terminal 3 - Currency Conversion Service  
+##### Terminal 3 - Currency Conversion Service  
 ```bash
 cd currency-conversion-service
 mvn spring-boot:run

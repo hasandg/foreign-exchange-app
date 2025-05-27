@@ -29,7 +29,7 @@ Make sure you have these installed (learned this the hard way after spending an 
 
 **Clone and build:**
 ```bash
-git clone https://github.com/hasandg/foreign-exchange-application.git
+git clone https://github.com/hasandg/foreign-exchange-app
 cd ForeignExchangeApplication
 mvn clean install
 ```

@@ -91,43 +91,6 @@ public class BatchJobService {
         }
     }
 
-    public Map<String, Object> getRecentJobsUsingExplorer(String jobName, int count) {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, count);
-            List<Map<String, Object>> jobs = jobInstances.stream()
-                .map(instance -> {
-                    List<JobExecution> executions = jobExplorer.getJobExecutions(instance);
-                    JobExecution latestExecution = executions.isEmpty() ? null : executions.get(0);
-                    
-                    Map<String, Object> jobInfo = new HashMap<>();
-                    jobInfo.put("jobInstanceId", instance.getInstanceId());
-                    jobInfo.put("jobName", instance.getJobName());
-                    
-                    if (latestExecution != null) {
-                        jobInfo.put("jobExecutionId", latestExecution.getId());
-                        jobInfo.put("status", latestExecution.getStatus().toString());
-                        jobInfo.put("startTime", latestExecution.getStartTime());
-                        jobInfo.put("endTime", latestExecution.getEndTime());
-                    }
-                    
-                    return jobInfo;
-                })
-                .toList();
-                
-            response.put("jobs", jobs);
-            response.put("totalJobs", jobs.size());
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving job list using JobExplorer", e);
-            response.put("error", "Error retrieving job list: " + e.getMessage());
-            return response;
-        }
-    }
-
     public Map<String, Object> processFileUploadAndStartJob(org.springframework.web.multipart.MultipartFile file, 
                                                            org.springframework.batch.core.launch.JobLauncher jobLauncher,
                                                            org.springframework.batch.core.Job bulkConversionJob) {

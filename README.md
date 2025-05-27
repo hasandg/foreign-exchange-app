@@ -30,7 +30,7 @@ Make sure you have these installed (learned this the hard way after spending an 
 **Clone and build:**
 ```bash
 git clone https://github.com/hasandg/foreign-exchange-app
-cd ForeignExchangeApplication
+cd foreign-exchange-app
 mvn clean install
 ```
 
@@ -48,6 +48,8 @@ if you don't want to build the images of microservices, you can remove the `--bu
 cd ../..
 docker compose -f infrastructure/docker-compose/common.yml -f docker-compose-all.yml up -d --build
 ```
+
+Now you can access the services as described in following **API Usage** section.
 
 ##### Stopping the infrastructure services and microservices:
 if you want to delete the volumes, you can add the `-v` option.
@@ -85,7 +87,7 @@ mvn spring-boot:run
 cd currency-conversion-service
 mvn spring-boot:run
 ```
-
+Now you can access the services as described in following **API Usage** section.
 
 #### Stopping other infrastructure services:
 if you want to delete the volumes, you can add the `-v` option.
@@ -139,8 +141,6 @@ USD,EUR,100.50
 GBP,USD,250.00
 EUR,JPY,75.25
 ```
-
-
 
 ## Batch Processing
 

@@ -156,7 +156,7 @@ The bulk processing feature uses Spring Batch with some custom optimizations:
 
 ## CQRS Implementation
 
-The system uses CQRS (Command Query Responsibility Segregation) to separate write and read operations:
+The system uses CQRS (Command Query Responsibility Segregation) to separate write and read operations for performance:
 
 ### Write Model (MongoDB)
 - Handles all conversion commands
@@ -177,9 +177,6 @@ The system uses CQRS (Command Query Responsibility Segregation) to separate writ
 5. Event consumer updates PostgreSQL (Read Model)
 6. Return response to client
 ```
-
-**Why CQRS?** Initially, I just had a simple CRUD application. But as requirements grew (analytics, reporting, audit trails),  
-CQRS made perfect sense. It allows us to optimize each side independently.
 
 ### Documentation with Swagger
 The application uses Swagger for API documentation. Access it at:

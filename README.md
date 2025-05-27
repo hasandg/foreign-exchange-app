@@ -207,7 +207,7 @@ http://localhost:8083/api/v1/swagger-ui/index.html
 
 ### Monitoring
 
-The application exposes metrics via Spring Actuator:
+The application exposes metrics via Spring Actuator:  
 http://localhost:8082/actuator/health  
 http://localhost:8082/actuator/metrics  
 http://localhost:8083/actuator/health  

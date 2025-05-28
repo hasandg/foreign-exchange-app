@@ -1,0 +1,55 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: exchange-rate-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+  cache:
+    type: redis
+    redis:
+      time-to-live: 2s
+      cache-null-values: false
+      key-prefix: "fx:"
+      use-key-prefix: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+logging:
+  level:
+    com.hasandag: DEBUG
+    org.springframework.web.reactive.function.client: DEBUG
+    org.springframework.data.redis: DEBUG
+
+springdoc:
+  api-docs:
+    path: /api/v1/api-docs
+  swagger-ui:
+    path: /api/v1/swagger-ui.html
+    operationsSorter: method
+    tagsSorter: alpha
+  default-produces-media-type: application/json
+
+exchange:
+  api:
+    url: https://open.er-api.com/v6/latest
+  webclient:
+    connect-timeout: 10s
+    read-timeout: 10s
+    write-timeout: 10s
+    response-timeout: 15s 

@@ -10,6 +10,7 @@ A microservices-based currency conversion system built with Spring Boot, impleme
 - Event-driven architecture using Kafka
 - RESTful APIs with comprehensive error handling
 - Docker-based deployment with monitoring
+- Bulk CSV processing for large-scale conversions
 
 ## Architecture Overview
 
@@ -113,6 +114,45 @@ curl -X POST http://localhost:8081/api/conversions \
   }'
 ```
 
+
+### Bulk CSV Processing
+```bash
+curl -X POST http://localhost:8081/api/conversions/bulk \
+  -F "file=@sample-conversions-100.csv"
+```
+
+### Check Job Status
+```bash
+curl http://localhost:8081/api/batch/jobs/{jobId}/status
+```
+
+## Sample Data
+
+I've included some CSV files for testing:
+- `sample-conversions-10.csv` - Small test file (good for debugging)
+- `sample-conversions-100.csv` - Medium test file (realistic load)
+
+CSV format:
+```csv
+sourceCurrency,targetCurrency,sourceAmount
+USD,EUR,100.50
+GBP,USD,250.00
+EUR,JPY,75.25
+```
+
+
+
+## Batch Processing
+
+The bulk processing feature uses Spring Batch with some custom optimizations:
+
+### Features
+- CSV file validation and parsing
+- Chunk-based processing (configurable batch size)
+- Error handling and skip logic
+- Progress tracking via REST API
+- Automatic cleanup of processed files
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -121,7 +161,7 @@ The application uses different profiles for different environments:
 
 **Local Development (default):**
 - Uses H2 for PostgreSQL (in-memory)
-- Uses embedded MongoDB (Flapdoodle)
+- Uses embedded MongoDB
 - Kafka runs in Docker
 
 **Docker Environment:**
@@ -158,6 +198,7 @@ The system uses CQRS (Command Query Responsibility Segregation) to separate writ
 
 ### Documentation with Swagger
 The application uses Swagger for API documentation. Access it at:
+
 #### Currency Conversion Service
 http://localhost:8082/api/v1/swagger-ui/index.html
 #### Exchange Rate Service

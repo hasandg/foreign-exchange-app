@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Slf4j
-@ConditionalOnProperty(name = "spring.batch.job.enabled", havingValue = "true", matchIfMissing = true)
 public class JobCompletionNotificationListener implements JobExecutionListener {
 
     @Override

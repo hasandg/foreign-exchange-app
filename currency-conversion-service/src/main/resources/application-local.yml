@@ -79,10 +79,9 @@ spring:
         retry.backoff.ms: 1000
   batch:
     job:
-      enabled: true
+      enabled: false
     jdbc:
-      initialize-schema: never
-      table-prefix: batch_
+      initialize-schema: always
   jackson:
     serialization:
       write-dates-as-timestamps: false

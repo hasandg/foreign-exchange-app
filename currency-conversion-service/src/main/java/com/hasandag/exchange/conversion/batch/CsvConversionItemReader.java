@@ -40,7 +40,9 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
     public void open(ExecutionContext executionContext) throws ItemStreamException {
         try {
             currentItemCount = executionContext.getInt(CURRENT_ITEM_COUNT, 0);
-            
+
+            System.out.println("Current item count from execution context: " + currentItemCount);
+
             bufferedReader = new BufferedReader(new FileReader(filePath));
             csvParser = CSVFormat.DEFAULT
                     .builder()

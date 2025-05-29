@@ -21,7 +21,6 @@ import java.util.Map;
 @RequestMapping("/api/v1/batch")
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "spring.batch.job.enabled", havingValue = "true", matchIfMissing = true)
 public class CurrencyConversionBatchJobController {
 
     private final JobLauncher jobLauncher;

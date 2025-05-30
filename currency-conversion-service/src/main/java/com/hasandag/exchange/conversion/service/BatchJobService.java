@@ -6,18 +6,19 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobInstance;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.explore.JobExplorer;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BatchJobService {
 
+    private final JdbcTemplate jdbcTemplate;
     private final JobExplorer jobExplorer;
 
     public Map<String, Object> getJobStatus(Long jobId) {
@@ -68,52 +69,18 @@ public class BatchJobService {
         Map<String, Object> response = new HashMap<>();
         
         try {
-            List<String> jobNames = jobExplorer.getJobNames();
-            List<Map<String, Object>> allJobs = new java.util.ArrayList<>();
+            String sql = """
+                SELECT je.job_execution_id, je.job_instance_id, je.status, je.start_time, 
+                       je.end_time, je.create_time, ji.job_name
+                FROM batch_job_execution je
+                JOIN batch_job_instance ji ON je.job_instance_id = ji.job_instance_id
+                ORDER BY je.job_execution_id DESC
+                LIMIT 50
+                """;
             
-            for (String jobName : jobNames) {
-                List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, 50);
-                
-                for (JobInstance jobInstance : jobInstances) {
-                    List<JobExecution> jobExecutions = jobExplorer.getJobExecutions(jobInstance);
-                    
-                    for (JobExecution jobExecution : jobExecutions) {
-                        Map<String, Object> jobInfo = new HashMap<>();
-                        jobInfo.put("job_execution_id", jobExecution.getId());
-                        jobInfo.put("job_instance_id", jobInstance.getInstanceId());
-                        jobInfo.put("job_name", jobInstance.getJobName());
-                        jobInfo.put("status", jobExecution.getStatus().toString());
-                        jobInfo.put("start_time", jobExecution.getStartTime());
-                        jobInfo.put("end_time", jobExecution.getEndTime());
-                        jobInfo.put("create_time", jobExecution.getCreateTime());
-                        jobInfo.put("exit_code", jobExecution.getExitStatus().getExitCode());
-                        
-                        Map<String, Object> parameters = new HashMap<>();
-                        if (jobExecution.getJobParameters() != null) {
-                            jobExecution.getJobParameters().getParameters().forEach((key, value) -> {
-                                if (!"file.content".equals(key)) {
-                                    parameters.put(key, value.getValue());
-                                }
-                            });
-                        }
-                        jobInfo.put("parameters", parameters);
-                        
-                        allJobs.add(jobInfo);
-                    }
-                }
-            }
-            
-            allJobs.sort((a, b) -> Long.compare(
-                (Long) b.get("job_execution_id"), 
-                (Long) a.get("job_execution_id")
-            ));
-            
-            List<Map<String, Object>> limitedJobs = allJobs.stream()
-                    .limit(50)
-                    .collect(java.util.stream.Collectors.toList());
-            
-            response.put("jobs", limitedJobs);
-            response.put("totalJobs", limitedJobs.size());
+            List<Map<String, Object>> jobs = jdbcTemplate.queryForList(sql);
+            response.put("jobs", jobs);
+            response.put("totalJobs", jobs.size());
             
             return response;
             
@@ -140,9 +107,9 @@ public class BatchJobService {
                 return response;
             }
 
-            String fileContent = new String(file.getBytes(), "UTF-8");
+            String filePath = saveUploadedFile(file);
             
-            org.springframework.batch.core.JobParameters jobParameters = createJobParameters(file, fileContent);
+            org.springframework.batch.core.JobParameters jobParameters = createJobParameters(file, filePath);
 
             org.springframework.batch.core.JobExecution jobExecution = jobLauncher.run(bulkConversionJob, jobParameters);
             response.put("jobId", jobExecution.getJobId());
@@ -162,159 +129,32 @@ public class BatchJobService {
         }
     }
 
-    public Map<String, Object> getJobsByName(String jobName, int page, int size) {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            int start = page * size;
-            List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, start, size);
-            List<Map<String, Object>> jobs = new java.util.ArrayList<>();
-            
-            for (JobInstance jobInstance : jobInstances) {
-                List<JobExecution> jobExecutions = jobExplorer.getJobExecutions(jobInstance);
-                
-                for (JobExecution jobExecution : jobExecutions) {
-                    Map<String, Object> jobInfo = createJobInfoMap(jobExecution, jobInstance);
-                    jobs.add(jobInfo);
-                }
-            }
-            
-            int totalCount = (int) jobExplorer.getJobInstanceCount(jobName);
-            
-            response.put("jobs", jobs);
-            response.put("totalJobs", totalCount);
-            response.put("currentPage", page);
-            response.put("pageSize", size);
-            response.put("totalPages", (int) Math.ceil((double) totalCount / size));
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving jobs by name: {}", jobName, e);
-            response.put("error", "Error retrieving jobs: " + e.getMessage());
-            return response;
-        }
-    }
-
-    public Map<String, Object> getRunningJobs() {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            List<String> jobNames = jobExplorer.getJobNames();
-            List<Map<String, Object>> runningJobs = new java.util.ArrayList<>();
-            
-            for (String jobName : jobNames) {
-                Set<JobExecution> runningExecutions = jobExplorer.findRunningJobExecutions(jobName);
-                
-                for (JobExecution jobExecution : runningExecutions) {
-                    Map<String, Object> jobInfo = createJobInfoMap(jobExecution, jobExecution.getJobInstance());
-                    runningJobs.add(jobInfo);
-                }
-            }
-            
-            response.put("runningJobs", runningJobs);
-            response.put("count", runningJobs.size());
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving running jobs", e);
-            response.put("error", "Error retrieving running jobs: " + e.getMessage());
-            return response;
-        }
-    }
-
-    public Map<String, Object> getJobStatistics() {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            List<String> jobNames = jobExplorer.getJobNames();
-            Map<String, Object> statistics = new HashMap<>();
-            
-            for (String jobName : jobNames) {
-                Map<String, Object> jobStats = new HashMap<>();
-                
-                int totalInstances = (int) jobExplorer.getJobInstanceCount(jobName);
-                jobStats.put("totalInstances", totalInstances);
-                
-                Set<JobExecution> runningExecutions = jobExplorer.findRunningJobExecutions(jobName);
-                jobStats.put("runningCount", runningExecutions.size());
-                
-                List<JobInstance> recentInstances = jobExplorer.getJobInstances(jobName, 0, 100);
-                int completedCount = 0;
-                int failedCount = 0;
-                
-                for (JobInstance instance : recentInstances) {
-                    List<JobExecution> executions = jobExplorer.getJobExecutions(instance);
-                    if (!executions.isEmpty()) {
-                        JobExecution latestExecution = executions.get(executions.size() - 1);
-                        switch (latestExecution.getStatus()) {
-                            case COMPLETED -> completedCount++;
-                            case FAILED -> failedCount++;
-                        }
-                    }
-                }
-                
-                jobStats.put("completedCount", completedCount);
-                jobStats.put("failedCount", failedCount);
-                
-                statistics.put(jobName, jobStats);
-            }
-            
-            response.put("statistics", statistics);
-            response.put("totalJobTypes", jobNames.size());
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving job statistics", e);
-            response.put("error", "Error retrieving job statistics: " + e.getMessage());
-            return response;
-        }
-    }
-
-    private Map<String, Object> createJobInfoMap(JobExecution jobExecution, JobInstance jobInstance) {
-        Map<String, Object> jobInfo = new HashMap<>();
-        jobInfo.put("job_execution_id", jobExecution.getId());
-        jobInfo.put("job_instance_id", jobInstance.getInstanceId());
-        jobInfo.put("job_name", jobInstance.getJobName());
-        jobInfo.put("status", jobExecution.getStatus().toString());
-        jobInfo.put("start_time", jobExecution.getStartTime());
-        jobInfo.put("end_time", jobExecution.getEndTime());
-        jobInfo.put("create_time", jobExecution.getCreateTime());
-        jobInfo.put("exit_code", jobExecution.getExitStatus().getExitCode());
-        
-        Map<String, Object> parameters = new HashMap<>();
-        if (jobExecution.getJobParameters() != null) {
-            jobExecution.getJobParameters().getParameters().forEach((key, value) -> {
-                if (!"file.content".equals(key)) {
-                    parameters.put(key, value.getValue());
-                }
-            });
-        }
-        jobInfo.put("parameters", parameters);
-        
-        Map<String, Object> progress = new HashMap<>();
-        for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
-            progress.put("readCount", stepExecution.getReadCount());
-            progress.put("writeCount", stepExecution.getWriteCount());
-            progress.put("commitCount", stepExecution.getCommitCount());
-            progress.put("skipCount", stepExecution.getSkipCount());
-            break;
-        }
-        jobInfo.put("progress", progress);
-        
-        return jobInfo;
-    }
-
     private boolean isValidFile(org.springframework.web.multipart.MultipartFile file) {
         String filename = file.getOriginalFilename();
         return filename != null && filename.toLowerCase().endsWith(".csv");
     }
 
-    private org.springframework.batch.core.JobParameters createJobParameters(org.springframework.web.multipart.MultipartFile file, String fileContent) {
+    private String saveUploadedFile(org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
+        String uploadDirectory = "./uploads";
+        java.nio.file.Path uploadPath = java.nio.file.Paths.get(uploadDirectory);
+        
+        if (!java.nio.file.Files.exists(uploadPath)) {
+            java.nio.file.Files.createDirectories(uploadPath);
+        }
+
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String savedFileName = timestamp + "_" + file.getOriginalFilename();
+        java.nio.file.Path filePath = uploadPath.resolve(savedFileName);
+        
+        java.nio.file.Files.copy(file.getInputStream(), filePath);
+        log.info("File saved: {}", filePath);
+        
+        return filePath.toString();
+    }
+
+    private org.springframework.batch.core.JobParameters createJobParameters(org.springframework.web.multipart.MultipartFile file, String filePath) {
         return new org.springframework.batch.core.JobParametersBuilder()
-                .addString("file.content", fileContent)
+                .addString("input.file.path", filePath)
                 .addString("original.filename", file.getOriginalFilename())
                 .addLong("file.size", file.getSize())
                 .addLong("timestamp", System.currentTimeMillis())

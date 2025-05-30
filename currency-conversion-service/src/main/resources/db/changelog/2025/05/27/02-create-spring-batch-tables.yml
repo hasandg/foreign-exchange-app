@@ -1,0 +1,310 @@
+databaseChangeLog:
+  - changeSet:
+      id: 02-create-spring-batch-job-instance-table
+      author: hasandag
+      context: local,docker
+      changes:
+        - createTable:
+            tableName: batch_job_instance
+            columns:
+              - column:
+                  name: job_instance_id
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+              - column:
+                  name: job_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: job_key
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+        - createSequence:
+            sequenceName: batch_job_instance_seq
+            startValue: 1
+            incrementBy: 1
+      rollback:
+        - dropSequence:
+            sequenceName: batch_job_instance_seq
+        - dropTable:
+            tableName: batch_job_instance
+
+  - changeSet:
+      id: 02-create-spring-batch-job-execution-table
+      author: hasandag
+      context: local,docker
+      changes:
+        - createTable:
+            tableName: batch_job_execution
+            columns:
+              - column:
+                  name: job_execution_id
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+              - column:
+                  name: job_instance_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: create_time
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: start_time
+                  type: TIMESTAMP
+              - column:
+                  name: end_time
+                  type: TIMESTAMP
+              - column:
+                  name: status
+                  type: VARCHAR(10)
+              - column:
+                  name: exit_code
+                  type: VARCHAR(2500)
+              - column:
+                  name: exit_message
+                  type: VARCHAR(2500)
+              - column:
+                  name: last_updated
+                  type: TIMESTAMP
+        - createSequence:
+            sequenceName: batch_job_execution_seq
+            startValue: 1
+            incrementBy: 1
+        - addForeignKeyConstraint:
+            baseTableName: batch_job_execution
+            baseColumnNames: job_instance_id
+            referencedTableName: batch_job_instance
+            referencedColumnNames: job_instance_id
+            constraintName: job_inst_exec_fk
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableName: batch_job_execution
+            constraintName: job_inst_exec_fk
+        - dropSequence:
+            sequenceName: batch_job_execution_seq
+        - dropTable:
+            tableName: batch_job_execution
+
+  - changeSet:
+      id: 02-create-spring-batch-job-execution-params-table
+      author: hasandag
+      context: local,docker
+      changes:
+        - createTable:
+            tableName: batch_job_execution_params
+            columns:
+              - column:
+                  name: job_execution_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: parameter_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: parameter_type
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: parameter_value
+                  type: VARCHAR(2500)
+              - column:
+                  name: identifying
+                  type: CHAR(1)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: batch_job_execution_params
+            baseColumnNames: job_execution_id
+            referencedTableName: batch_job_execution
+            referencedColumnNames: job_execution_id
+            constraintName: job_exec_params_fk
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableName: batch_job_execution_params
+            constraintName: job_exec_params_fk
+        - dropTable:
+            tableName: batch_job_execution_params
+
+  - changeSet:
+      id: 02-create-spring-batch-step-execution-table
+      author: hasandag
+      context: local,docker
+      changes:
+        - createTable:
+            tableName: batch_step_execution
+            columns:
+              - column:
+                  name: step_execution_id
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: step_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: job_execution_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: create_time
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: start_time
+                  type: TIMESTAMP
+              - column:
+                  name: end_time
+                  type: TIMESTAMP
+              - column:
+                  name: status
+                  type: VARCHAR(10)
+              - column:
+                  name: commit_count
+                  type: BIGINT
+              - column:
+                  name: read_count
+                  type: BIGINT
+              - column:
+                  name: filter_count
+                  type: BIGINT
+              - column:
+                  name: write_count
+                  type: BIGINT
+              - column:
+                  name: read_skip_count
+                  type: BIGINT
+              - column:
+                  name: write_skip_count
+                  type: BIGINT
+              - column:
+                  name: process_skip_count
+                  type: BIGINT
+              - column:
+                  name: rollback_count
+                  type: BIGINT
+              - column:
+                  name: exit_code
+                  type: VARCHAR(2500)
+              - column:
+                  name: exit_message
+                  type: VARCHAR(2500)
+              - column:
+                  name: last_updated
+                  type: TIMESTAMP
+        - createSequence:
+            sequenceName: batch_step_execution_seq
+            startValue: 1
+            incrementBy: 1
+        - addForeignKeyConstraint:
+            baseTableName: batch_step_execution
+            baseColumnNames: job_execution_id
+            referencedTableName: batch_job_execution
+            referencedColumnNames: job_execution_id
+            constraintName: job_exec_step_fk
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableName: batch_step_execution
+            constraintName: job_exec_step_fk
+        - dropSequence:
+            sequenceName: batch_step_execution_seq
+        - dropTable:
+            tableName: batch_step_execution
+
+  - changeSet:
+      id: 02-create-spring-batch-step-execution-context-table
+      author: hasandag
+      context: local,docker
+      changes:
+        - createTable:
+            tableName: batch_step_execution_context
+            columns:
+              - column:
+                  name: step_execution_id
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: short_context
+                  type: VARCHAR(2500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: serialized_context
+                  type: TEXT
+        - addForeignKeyConstraint:
+            baseTableName: batch_step_execution_context
+            baseColumnNames: step_execution_id
+            referencedTableName: batch_step_execution
+            referencedColumnNames: step_execution_id
+            constraintName: step_exec_ctx_fk
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableName: batch_step_execution_context
+            constraintName: step_exec_ctx_fk
+        - dropTable:
+            tableName: batch_step_execution_context
+
+  - changeSet:
+      id: 02-create-spring-batch-job-execution-context-table
+      author: hasandag
+      context: local,docker
+      changes:
+        - createTable:
+            tableName: batch_job_execution_context
+            columns:
+              - column:
+                  name: job_execution_id
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: short_context
+                  type: VARCHAR(2500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: serialized_context
+                  type: TEXT
+        - addForeignKeyConstraint:
+            baseTableName: batch_job_execution_context
+            baseColumnNames: job_execution_id
+            referencedTableName: batch_job_execution
+            referencedColumnNames: job_execution_id
+            constraintName: job_exec_ctx_fk
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableName: batch_job_execution_context
+            constraintName: job_exec_ctx_fk
+        - dropTable:
+            tableName: batch_job_execution_context 

@@ -79,9 +79,10 @@ spring:
         retry.backoff.ms: 1000
   batch:
     job:
-      enabled: false
+      enabled: true
     jdbc:
-      initialize-schema: always
+      initialize-schema: never
+      table-prefix: batch_
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -146,3 +147,6 @@ conversion:
       max-pool-size: 4
       queue-capacity: 100
       thread-name-prefix: "batch-"
+  csv:
+    upload:
+      dir: ${CSV_UPLOAD_DIR:/app/uploads}

@@ -12,8 +12,9 @@ import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemStream;
 import org.springframework.batch.item.ItemStreamException;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
-import java.io.StringReader;
 import java.math.BigDecimal;
 import java.util.Iterator;
 
@@ -21,32 +22,26 @@ import java.util.Iterator;
 public class CsvConversionItemReader implements ItemReader<ConversionRequest>, ItemStream {
     
     private static final String CURRENT_ITEM_COUNT = "current.item.count";
-    private static final String FILE_CONTENT_KEY = "file.content";
+    private static final String FILE_PATH_KEY = "input.file.path";
     
-    private String fileContent;
-    private String originalFilename;
+    private String filePath;
     private CSVParser csvParser;
     private Iterator<CSVRecord> recordIterator;
+    private BufferedReader bufferedReader;
     private int currentItemCount = 0;
 
     @BeforeStep
     public void beforeStep(StepExecution stepExecution) {
-        this.fileContent = stepExecution.getJobParameters().getString(FILE_CONTENT_KEY);
-        this.originalFilename = stepExecution.getJobParameters().getString("original.filename");
-        log.info("Reading CSV content from memory, original filename: {}", originalFilename);
+        this.filePath = stepExecution.getJobParameters().getString("input.file.path");
+        log.info("Reading CSV file: {}", filePath);
     }
 
     @Override
     public void open(ExecutionContext executionContext) throws ItemStreamException {
         try {
             currentItemCount = executionContext.getInt(CURRENT_ITEM_COUNT, 0);
-            log.debug("Current item count from execution context: {}", currentItemCount);
-
-            if (fileContent == null || fileContent.trim().isEmpty()) {
-                throw new ItemStreamException("CSV file content is null or empty");
-            }
-
-            StringReader stringReader = new StringReader(fileContent);
+            
+            bufferedReader = new BufferedReader(new FileReader(filePath));
             csvParser = CSVFormat.DEFAULT
                     .builder()
                     .setHeader()
@@ -54,7 +49,7 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
                     .setIgnoreHeaderCase(true)
                     .setTrim(true)
                     .build()
-                    .parse(stringReader);
+                    .parse(bufferedReader);
             
             recordIterator = csvParser.iterator();
             
@@ -64,9 +59,9 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
                 }
             }
             
-            log.info("CSV reader opened from memory, skipped {} records", currentItemCount);
+            log.info("CSV reader opened, skipped {} records", currentItemCount);
         } catch (IOException e) {
-            throw new ItemStreamException("Error parsing CSV content from memory", e);
+            throw new ItemStreamException("Error opening CSV file: " + filePath, e);
         }
     }
 
@@ -80,7 +75,6 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
                 String sourceAmountStr = record.get("sourceAmount");
                 String sourceCurrency = record.get("sourceCurrency");
                 String targetCurrency = record.get("targetCurrency");
-                
                 if (sourceAmountStr == null || sourceAmountStr.trim().isEmpty()) {
                     log.error("Missing or empty sourceAmount at line {}", currentItemCount);
                     throw new IllegalArgumentException("Missing or empty sourceAmount");
@@ -118,9 +112,7 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
     @Override
     public void update(ExecutionContext executionContext) throws ItemStreamException {
         executionContext.putInt(CURRENT_ITEM_COUNT, currentItemCount);
-        if (originalFilename != null) {
-            executionContext.putString("original.filename", originalFilename);
-        }
+        executionContext.putString(FILE_PATH_KEY, filePath);
     }
 
     @Override
@@ -129,9 +121,12 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
             if (csvParser != null) {
                 csvParser.close();
             }
-            log.info("CSV reader closed after processing {} records from memory", currentItemCount);
+            if (bufferedReader != null) {
+                bufferedReader.close();
+            }
+            log.info("CSV reader closed after processing {} records", currentItemCount);
         } catch (IOException e) {
-            throw new ItemStreamException("Error closing CSV parser", e);
+            throw new ItemStreamException("Error closing CSV file resources", e);
         }
     }
 } 

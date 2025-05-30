@@ -9,9 +9,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Collections;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -27,7 +25,7 @@ public class ConversionQueryServiceImpl implements ConversionQueryService {
     }
 
     @Override
-    public Page<CurrencyConversionEntity> findConversions(String transactionId, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+    public Page<CurrencyConversionEntity> findConversions(String transactionId, LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         log.debug("Finding conversions - Transaction ID: {}, StartDate: {}, EndDate: {}", transactionId, startDate, endDate);
 
         if (transactionId != null) {
@@ -40,19 +38,27 @@ public class ConversionQueryServiceImpl implements ConversionQueryService {
         }
         
         if (startDate != null && endDate != null) {
-            log.debug("Querying by date range: Start: {}, End: {}", startDate, endDate);
+            log.debug("Querying by date-time range: Start: {}, End: {}", startDate, endDate);
             if (startDate.isAfter(endDate)) {
-                log.warn("Start date {} is after end date {}. Returning empty page.", startDate, endDate);
+                log.warn("Start date-time {} is after end date-time {}. Returning empty page.", startDate, endDate);
                 return getEmptyConversionsPage(pageable);
             }
-            LocalDateTime startDateTime = startDate.atStartOfDay();
-            LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
             
-            return repository.findByTimestampBetweenOrderByTimestampDesc(startDateTime, endDateTime, pageable);
+            return repository.findByTimestampBetweenOrderByTimestampDesc(startDate, endDate, pageable);
+        }
+
+        if (startDate != null) {
+            log.debug("Querying from start date-time: {}", startDate);
+            return repository.findByTimestampGreaterThanEqualOrderByTimestampDesc(startDate, pageable);
+        }
+
+        if (endDate != null) {
+            log.debug("Querying up to end date-time: {}", endDate);
+            return repository.findByTimestampLessThanEqualOrderByTimestampDesc(endDate, pageable);
         }
 
         log.warn("No valid query parameters provided (transactionId or date range).");
-        throw new IllegalArgumentException("Query parameters invalid: Provide a transactionId or a valid date range (startDate and endDate).");
+        throw new IllegalArgumentException("Query parameters invalid: Provide a transactionId or a valid date range (startDate and/or endDate).");
     }
 
     private Page<CurrencyConversionEntity> getEmptyConversionsPage(Pageable pageable) {

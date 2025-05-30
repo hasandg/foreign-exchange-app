@@ -5,6 +5,8 @@ import com.hasandag.exchange.common.dto.ConversionResponse;
 import com.hasandag.exchange.conversion.model.CurrencyConversionEntity;
 import com.hasandag.exchange.conversion.service.ConversionCommandService;
 import com.hasandag.exchange.conversion.service.ConversionQueryService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,7 +14,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/conversions")
@@ -34,10 +36,14 @@ public class CurrencyConversionController {
     }
 
     @GetMapping("/history")
+    @Operation(summary = "Get conversion history with date-time precision")
     public ResponseEntity<Page<CurrencyConversionEntity>> getConversionHistory(
+            @Parameter(description = "Transaction ID", example = "TXN123456")
             @RequestParam(required = false) String transactionId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @Parameter(description = "Start date-time (ISO format)", example = "2025-05-29T10:30:00")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @Parameter(description = "End date-time (ISO format)", example = "2025-05-29T18:45:00")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             Pageable pageable) {
         
         Page<CurrencyConversionEntity> history = queryService.findConversions(

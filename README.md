@@ -16,7 +16,7 @@ A microservices-based currency conversion system built with Spring Boot, impleme
 
 The system follows a microservices architecture with clear separation of concerns:
 
-[![Architecture Diagram](https://github.com/hasandg/foreign-exchange-app/blob/main/ForeignExchangeApplicationDiagram.png)](https://github.com/hasandg/foreign-exchange-app/blob/main/ForeignExchangeApplicationDiagram.png) 
+[![Architecture Diagram](ForeignExchangeApplicationDiagram.png)] 
 
 ## Quick Start
 
@@ -193,3 +193,9 @@ http://localhost:8082/actuator/health
 http://localhost:8082/actuator/metrics  
 http://localhost:8083/actuator/health  
 http://localhost:8083/actuator/metrics
+
+### Future Considerations
+- **Caching**: Implement caching for frequently accessed data(For example, in conversion service, exchange rates could be cached)
+- **Scaling**: Consider using Kubernetes for orchestration
+- **Security**: Add authentication/authorization
+- **Testing**: Improve unit and integration test coverage

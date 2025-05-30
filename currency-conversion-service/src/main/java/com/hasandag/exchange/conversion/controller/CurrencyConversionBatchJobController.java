@@ -1,10 +1,15 @@
 package com.hasandag.exchange.conversion.controller;
 
 import com.hasandag.exchange.conversion.service.BatchJobService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.*;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,8 +31,11 @@ public class CurrencyConversionBatchJobController {
     private final Job bulkConversionJob;
     private final BatchJobService batchJobService;
 
-    @PostMapping("/conversions")
-    public ResponseEntity<Map<String, Object>> startBulkConversionJob(@RequestParam("file") MultipartFile file) {
+    @PostMapping(value = "/conversions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Start bulk conversion job")
+    public ResponseEntity<Map<String, Object>> startBulkConversionJob(
+            @Parameter(description = "CSV file", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE))
+            @RequestParam("file") MultipartFile file) {
         Map<String, Object> response = batchJobService.processFileUploadAndStartJob(file, jobLauncher, bulkConversionJob);
         
         if (response.containsKey("error")) {

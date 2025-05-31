@@ -77,10 +77,11 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
             currentItemCount++;
             
             try {
-                String sourceAmountStr = record.get("sourceAmount");
                 String sourceCurrency = record.get("sourceCurrency");
                 String targetCurrency = record.get("targetCurrency");
-                
+                String sourceAmountStr = record.get("sourceAmount");
+
+
                 if (sourceAmountStr == null || sourceAmountStr.trim().isEmpty()) {
                     log.error("Missing or empty sourceAmount at line {}", currentItemCount);
                     throw new IllegalArgumentException("Missing or empty sourceAmount");

@@ -38,7 +38,7 @@ public class CurrencyConversionController {
     @GetMapping("/history")
     @Operation(summary = "Get conversion history with date-time precision")
     public ResponseEntity<Page<CurrencyConversionEntity>> getConversionHistory(
-            @Parameter(description = "Transaction ID", example = "TXN123456")
+            @Parameter(description = "Transaction ID")
             @RequestParam(required = false) String transactionId,
             @Parameter(description = "Start date-time (ISO format)", example = "2025-05-29T10:30:00")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,

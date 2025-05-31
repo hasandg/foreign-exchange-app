@@ -22,7 +22,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
-@ConditionalOnProperty(name = "kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class KafkaConfig {
 
     private final String bootstrapServers;
@@ -47,19 +46,6 @@ public class KafkaConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "kafka.admin.enabled", havingValue = "true", matchIfMissing = true)
-    public NewTopic conversionCommandTopic(
-            @Value("${kafka.topics.conversion-command.name:conversion-command-topic}") String topicName,
-            @Value("${kafka.topics.conversion-command.partitions:3}") int partitions,
-            @Value("${kafka.topics.conversion-command.replicas:1}") int replicas) {
-        return TopicBuilder.name(topicName)
-                .partitions(partitions)
-                .replicas(replicas)
-                .build();
-    }
-
-    @Bean
-    @ConditionalOnProperty(name = "kafka.admin.enabled", havingValue = "true", matchIfMissing = true)
     public NewTopic conversionEventTopic(
             @Value("${kafka.topics.conversion-event.name:conversion-event-topic}") String topicName,
             @Value("${kafka.topics.conversion-event.partitions:3}") int partitions,
@@ -89,34 +75,7 @@ public class KafkaConfig {
         return new KafkaTemplate<>(producerFactory());
     }
 
-    @Bean
-    public ConsumerFactory<String, Object> conversionCommandConsumerFactory() {
-        Map<String, Object> configProps = new HashMap<>();
-        configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        configProps.put(ConsumerConfig.GROUP_ID_CONFIG, KafkaConstants.COMMAND_HANDLER_GROUP);
-        configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-        configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-        configProps.put(ErrorHandlingDeserializer.KEY_DESERIALIZER_CLASS, StringDeserializer.class);
-        configProps.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class);
-        configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "com.hasandag.exchange.common.dto.cqrs.*");
-        configProps.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
-        configProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE, "com.hasandag.exchange.common.dto.cqrs.ConversionCommand");
-        configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        configProps.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 5000);
-        configProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
-        configProps.put(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG, 10000);
-        configProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, 1000);
-        configProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, 1000);
-        return new DefaultKafkaConsumerFactory<>(configProps);
-    }
 
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, Object> conversionCommandListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(conversionCommandConsumerFactory());
-        return factory;
-    }
-    
     @Bean
     public ConsumerFactory<String, Object> conversionEventConsumerFactory() {
         Map<String, Object> configProps = new HashMap<>();
@@ -136,13 +95,6 @@ public class KafkaConfig {
         configProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, 1000);
         configProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, 1000);
         return new DefaultKafkaConsumerFactory<>(configProps);
-    }
-
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, Object> conversionEventListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(conversionEventConsumerFactory());
-        return factory;
     }
 
     @Bean

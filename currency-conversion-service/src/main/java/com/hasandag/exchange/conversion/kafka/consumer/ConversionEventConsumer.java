@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class ConversionEventConsumer {
 
     private final CurrencyConversionPostgresRepository postgresConversionRepository;

@@ -124,9 +124,9 @@ public class BatchJobService {
         }
     }
 
-    public Map<String, Object> processFileUploadAndStartJob(org.springframework.web.multipart.MultipartFile file, 
-                                                           org.springframework.batch.core.launch.JobLauncher jobLauncher,
-                                                           org.springframework.batch.core.Job bulkConversionJob) {
+    public Map<String, Object> processJob(org.springframework.web.multipart.MultipartFile file,
+                                          org.springframework.batch.core.launch.JobLauncher jobLauncher,
+                                          org.springframework.batch.core.Job bulkConversionJob) {
         Map<String, Object> response = new HashMap<>();
         
         try {

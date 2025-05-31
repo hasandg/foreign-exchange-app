@@ -35,7 +35,7 @@ public class CurrencyConversionBatchJobController {
     public ResponseEntity<Map<String, Object>> startBulkConversionJob(
             @Parameter(description = "CSV file", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE))
             @RequestParam("file") MultipartFile file) {
-        Map<String, Object> response = batchJobService.processFileUploadAndStartJob(file, jobLauncher, bulkConversionJob);
+        Map<String, Object> response = batchJobService.processJob(file, jobLauncher, bulkConversionJob);
         
         if (response.containsKey("error")) {
             Integer httpStatus = (Integer) response.get("httpStatus");

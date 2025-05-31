@@ -199,3 +199,6 @@ http://localhost:8083/actuator/metrics
 - **Scaling**: Consider using Kubernetes for orchestration
 - **Security**: Add authentication/authorization
 - **Testing**: Improve unit and integration test coverage
+- **Sharding**: For following reasons, sharding could be considerable:
+     * MongoDB and TransactionId is the key for checking existence of conversion in the database
+     * In our CQRS implementation, MongoDB s performance is critical for responding to the client in real-time

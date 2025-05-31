@@ -106,10 +106,6 @@ kafka:
   admin:
     enabled: true
   topics:
-    conversion-command:
-      name: conversion-command-topic
-      partitions: 3
-      replicas: 1
     conversion-event:
       name: conversion-event-topic
       partitions: 3

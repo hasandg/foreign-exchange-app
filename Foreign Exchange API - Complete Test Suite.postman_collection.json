@@ -1,0 +1,820 @@
+{
+	"info": {
+		"_postman_id": "6af6784f-30fb-4091-9ef2-e3bd13615c53",
+		"name": "Foreign Exchange API - Complete Test Suite",
+		"description": "Comprehensive API testing collection with performance tests, fault scenarios, and automation",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "36191883"
+	},
+	"item": [
+		{
+			"name": "🌍 Exchange Rate Service",
+			"item": [
+				{
+					"name": "Get Exchange Rate - USD to EUR",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has rate field', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('rate');",
+									"    pm.expect(jsonData.rate).to.be.a('number');",
+									"    ",
+									"    // Store exchange rate for later use",
+									"    pm.collectionVariables.set('exchange_rate', jsonData.rate);",
+									"});",
+									"",
+									"pm.test('Response time is less than 2000ms', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+									"});",
+									"",
+									"pm.test('Rate is reasonable (between 0.1 and 10)', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.rate).to.be.above(0.1);",
+									"    pm.expect(jsonData.rate).to.be.below(10);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_exchange}}/api/v1/exchange-rates?sourceCurrency=USD&targetCurrency=EUR",
+							"host": [
+								"{{base_url_exchange}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"exchange-rates"
+							],
+							"query": [
+								{
+									"key": "sourceCurrency",
+									"value": "USD"
+								},
+								{
+									"key": "targetCurrency",
+									"value": "EUR"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "💱 Currency Conversion Service",
+			"item": [
+				{
+					"name": "Single Currency Conversion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has transaction ID', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('transactionId');",
+									"    pm.collectionVariables.set('transaction_id', jsonData.transactionId);",
+									"});",
+									"",
+									"pm.test('Conversion calculation is correct', function () {",
+									"    const jsonData = pm.response.json();",
+									"    const expectedAmount = jsonData.sourceAmount * jsonData.exchangeRate;",
+									"    pm.expect(Math.abs(jsonData.targetAmount - expectedAmount)).to.be.below(0.01);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sourceAmount\": 100.00,\n  \"sourceCurrency\": \"USD\",\n  \"targetCurrency\": \"EUR\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_conversion}}/api/v1/conversions",
+							"host": [
+								"{{base_url_conversion}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"conversions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Batch Upload - Small File (30 records)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Job started successfully', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('jobId');",
+									"    pm.collectionVariables.set('my_collection_variable_job_id', jsonData.jobId);",
+									"    pm.globals.set('my_job_id', jsonData.jobId);",
+									"    pm.environment.set('job_id', jsonData.jobId);",
+									"",
+									"    pm.expect(jsonData.status).to.include('STARTING');",
+									"    pm.environment.set('status', jsonData.status);",
+									"});",
+									"",
+									"pm.test('File size is reasonable', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.fileSize).to.be.above(100);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// This request uses file upload with test-chunking-30-records.csv",
+									"// Make sure the CSV file exists in your project directory",
+									"console.log('Preparing batch upload test...');",
+									"console.log('Expected file: test-chunking-30-records.csv');",
+									"",
+									"// Set timestamp for this test run",
+									"pm.collectionVariables.set('test_timestamp', new Date().toISOString());"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "multipart/form-data",
+								"description": "Auto-generated by Postman for file uploads",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"description": "CSV file with conversion requests",
+									"type": "file",
+									"src": "/Users/hasandag/DEPO/1.CALISMALAR/3.my_git_repositories/JAVA/SPRING/OpenPayd/foreign-exchange-app/sample-conversions-1000.csv"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url_conversion}}/api/v1/batch/conversions",
+							"host": [
+								"{{base_url_conversion}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"batch",
+								"conversions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Check Batch Job Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Job status contains progress info', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('progress');",
+									"    pm.expect(jsonData.progress).to.have.property('readCount');",
+									"    pm.expect(jsonData.progress).to.have.property('writeCount');",
+									"});",
+									"",
+									"pm.test('Chunking evidence (commitCount)', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.progress.commitCount).to.be.above(1);",
+									"    console.log('CommitCount: ' + jsonData.progress.commitCount + ' (proves chunking)');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"packages": {},
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_conversion}}/api/v1/batch/conversions/{{job_id}}/status",
+							"host": [
+								"{{base_url_conversion}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"batch",
+								"conversions",
+								"{{job_id}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Conversion History",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has pagination info', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('content');",
+									"    pm.expect(jsonData).to.have.property('totalElements');",
+									"    pm.expect(jsonData.content).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_conversion}}/api/v1/conversions/history?page=0&size=10",
+							"host": [
+								"{{base_url_conversion}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"conversions",
+								"history"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🌐 API Gateway Tests",
+			"item": [
+				{
+					"name": "Gateway - Single Conversion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Gateway forwards request successfully', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('No circuit breaker fallback', function () {",
+									"    pm.expect(pm.response.text()).to.not.include('unavailable');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sourceAmount\": 150.00,\n  \"sourceCurrency\": \"USD\",\n  \"targetCurrency\": \"GBP\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_gateway}}/api/v1/conversions",
+							"host": [
+								"{{base_url_gateway}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"conversions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Gateway - Batch Upload",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Gateway might return 503 if circuit breaker is open",
+									"pm.test('Gateway handles batch upload request', function () {",
+									"    const acceptableStatuses = [200, 503];",
+									"    pm.expect(acceptableStatuses).to.include(pm.response.code);",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    pm.test('Batch job started through gateway', function () {",
+									"        const jsonData = pm.response.json();",
+									"        pm.expect(jsonData).to.have.property('jobId');",
+									"        pm.collectionVariables.set('gateway_jobId', jsonData.jobId);",
+									"    });",
+									"} else if (pm.response.code === 503) {",
+									"    pm.test('Circuit breaker fallback triggered', function () {",
+									"        pm.expect(pm.response.text()).to.include('unavailable');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "multipart/form-data",
+								"description": "Auto-generated by Postman for file uploads",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"description": "CSV file with conversion requests",
+									"type": "file",
+									"src": "test-chunking-30-records.csv"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url_gateway}}/api/v1/batch/conversions",
+							"host": [
+								"{{base_url_gateway}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"batch",
+								"conversions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Circuit Breaker Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Circuit breaker status endpoint works', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Circuit breaker info is available', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(typeof jsonData).to.eq('object');",
+									"    console.log('Circuit Breaker States:', JSON.stringify(jsonData, null, 2));",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_gateway}}/fallback/circuit-breaker/status",
+							"host": [
+								"{{base_url_gateway}}"
+							],
+							"path": [
+								"fallback",
+								"circuit-breaker",
+								"status"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🔥 Performance Tests",
+			"item": [
+				{
+					"name": "Load Test - 50 Concurrent Requests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Response time under load < 5000ms', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(5000);",
+									"});",
+									"",
+									"pm.test('No errors under load', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"// Log performance metrics",
+									"console.log('Response time: ' + pm.response.responseTime + 'ms');",
+									"console.log('Response size: ' + pm.response.headers.get('content-length') + ' bytes');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Randomize test data for load testing",
+									"const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD'];",
+									"const amounts = [50, 100, 250, 500, 1000];",
+									"",
+									"pm.collectionVariables.set('random_amount', amounts[Math.floor(Math.random() * amounts.length)]);",
+									"pm.collectionVariables.set('random_source', currencies[Math.floor(Math.random() * currencies.length)]);",
+									"pm.collectionVariables.set('random_target', currencies[Math.floor(Math.random() * currencies.length)]);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sourceAmount\": {{random_amount}},\n  \"sourceCurrency\": \"{{random_source}}\",\n  \"targetCurrency\": \"{{random_target}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_conversion}}/api/v1/conversions",
+							"host": [
+								"{{base_url_conversion}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"conversions"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🚨 Fault Testing",
+			"item": [
+				{
+					"name": "Invalid Currency Code",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Returns validation error for invalid currency', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test('Error message is descriptive', function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('currency');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sourceAmount\": 100,\n  \"sourceCurrency\": \"INVALID\",\n  \"targetCurrency\": \"EUR\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_conversion}}/api/v1/conversions",
+							"host": [
+								"{{base_url_conversion}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"conversions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Negative Amount",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Rejects negative amounts', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test('Validation message mentions amount', function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText.toLowerCase()).to.include('amount');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sourceAmount\": -100,\n  \"sourceCurrency\": \"USD\",\n  \"targetCurrency\": \"EUR\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url_conversion}}/api/v1/conversions",
+							"host": [
+								"{{base_url_conversion}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"conversions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Service Unavailable Simulation",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Handles service unavailability gracefully', function () {",
+									"    // This test expects either 503 or timeout",
+									"    const statusCode = pm.response.code;",
+									"    pm.expect([503, 0]).to.include(statusCode);",
+									"});",
+									"",
+									"if (pm.response.code === 503) {",
+									"    pm.test('Circuit breaker fallback message', function () {",
+									"        pm.expect(pm.response.text()).to.include('unavailable');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sourceAmount\": 100,\n  \"sourceCurrency\": \"USD\",\n  \"targetCurrency\": \"EUR\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:9999/api/v1/conversions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9999",
+							"path": [
+								"api",
+								"v1",
+								"conversions"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🔧 Admin & Debugging",
+			"item": [
+				{
+					"name": "Reset Circuit Breaker - Batch Service",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Circuit breaker reset successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Reset confirmation message', function () {",
+									"    pm.expect(pm.response.text()).to.include('reset');",
+									"    pm.expect(pm.response.text()).to.include('CLOSED');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_gateway}}/fallback/circuit-breaker/batchService/reset",
+							"host": [
+								"{{base_url_gateway}}"
+							],
+							"path": [
+								"fallback",
+								"circuit-breaker",
+								"batchService",
+								"reset"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Circuit Breaker - Conversion Service",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Circuit breaker reset successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Reset confirmation message', function () {",
+									"    pm.expect(pm.response.text()).to.include('reset');",
+									"    pm.expect(pm.response.text()).to.include('CLOSED');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url_gateway}}/fallback/circuit-breaker/conversionService/reset",
+							"host": [
+								"{{base_url_gateway}}"
+							],
+							"path": [
+								"fallback",
+								"circuit-breaker",
+								"conversionService",
+								"reset"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url_gateway",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "base_url_exchange",
+			"value": "http://localhost:8083",
+			"type": "string"
+		},
+		{
+			"key": "base_url_conversion",
+			"value": "http://localhost:8082",
+			"type": "string"
+		},
+		{
+			"key": "jobId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "transaction_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "exchange_rate",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "test_timestamp",
+			"value": ""
+		},
+		{
+			"key": "job_id",
+			"value": ""
+		},
+		{
+			"key": "my_collection_variable_job_id",
+			"value": ""
+		}
+	]
+}

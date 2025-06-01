@@ -73,9 +73,7 @@ public class BatchConfiguration {
     public ItemWriter<ConversionResponse> batchConversionItemWriter() {
         List<ItemWriter<? super ConversionResponse>> delegates = new ArrayList<>();
 
-        if (mongoRepository != null) {
-            delegates.add(createMongoItemWriter());
-        }
+        delegates.add(createMongoItemWriter());
         delegates.add(createPostgresItemWriter());
 
         return new ConversionItemWriter(delegates);
@@ -125,12 +123,12 @@ public class BatchConfiguration {
         TaskExecutorJobLauncher jobLauncher = new TaskExecutorJobLauncher();
         jobLauncher.setJobRepository(jobRepository);
         jobLauncher.setTaskExecutor(batchTaskExecutor());
-        
+
         jobLauncher.afterPropertiesSet();
-        
+
         log.warn("✅ Configured ASYNC JobLauncher as PRIMARY - jobs will return immediately");
         log.warn("✅ Using TaskExecutor: {} with core pool size: 2", batchTaskExecutor().getClass().getSimpleName());
-        
+
         return jobLauncher;
     }
 
@@ -141,13 +139,13 @@ public class BatchConfiguration {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("batch-async-");
-        
+
         executor.setDaemon(false);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
-        
+
         executor.initialize();
-        
+
         log.warn("✅ Configured TaskExecutor - core: 2, max: 4, queue: 100, daemon: false");
         return executor;
     }

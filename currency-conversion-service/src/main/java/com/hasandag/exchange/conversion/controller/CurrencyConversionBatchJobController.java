@@ -1,6 +1,5 @@
 package com.hasandag.exchange.conversion.controller;
 
-import com.hasandag.exchange.conversion.service.AsyncBatchJobService;
 import com.hasandag.exchange.conversion.service.BatchJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -9,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.*;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,96 +28,70 @@ import java.util.Map;
 public class CurrencyConversionBatchJobController {
 
     private final JobLauncher jobLauncher;
+    @Qualifier("asyncJobLauncher")
+    private final JobLauncher asyncJobLauncher;
     private final Job bulkConversionJob;
     private final BatchJobService batchJobService;
-    private final AsyncBatchJobService asyncBatchJobService;
 
     @PostMapping(value = "/conversions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Start bulk conversion job (legacy - waits for job start)")
+    @Operation(summary = "Start bulk conversion job (synchronous)")
     public ResponseEntity<Map<String, Object>> startBulkConversionJob(
             @Parameter(description = "CSV file", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE))
             @RequestParam("file") MultipartFile file) {
         
-        log.info("🚀 Starting LEGACY batch job with JobLauncher: {}", jobLauncher.getClass().getSimpleName());
+        log.info("🚀 Starting synchronous batch job");
         long startTime = System.currentTimeMillis();
         
+        // Uses unified BatchJobService with proper exception handling
         Map<String, Object> response = batchJobService.processJob(file, jobLauncher, bulkConversionJob);
         
         long responseTime = System.currentTimeMillis() - startTime;
-        log.info("⏱️ Legacy batch job submission took: {}ms", responseTime);
-        
-        if (response.containsKey("error")) {
-            Integer httpStatus = (Integer) response.get("httpStatus");
-            if (httpStatus != null) {
-                response.remove("httpStatus");
-                return ResponseEntity.status(httpStatus).body(response);
-            }
-            return ResponseEntity.badRequest().body(response);
-        }
+        log.info("⏱️ Synchronous batch job submission took: {}ms", responseTime);
         
         return ResponseEntity.ok(response);
     }
 
     @PostMapping(value = "/conversions/async", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Start bulk conversion job asynchronously (returns immediately)")
+    @Operation(summary = "Start bulk conversion job (asynchronous)")
     public ResponseEntity<Map<String, Object>> startAsyncBulkConversionJob(
             @Parameter(description = "CSV file", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE))
             @RequestParam("file") MultipartFile file) {
         
-        log.info("⚡ Starting TRUE ASYNC batch job");
+        log.info("🚀 Starting asynchronous batch job");
         long startTime = System.currentTimeMillis();
         
-        Map<String, Object> response = asyncBatchJobService.processJobAsync(file, bulkConversionJob);
+        // Uses unified BatchJobService for async processing
+        Map<String, Object> response = batchJobService.processJobAsync(file, asyncJobLauncher, bulkConversionJob);
         
         long responseTime = System.currentTimeMillis() - startTime;
-        log.info("🚀 Async batch job submission took: {}ms (should be ~50-100ms)", responseTime);
-        
-        if (response.containsKey("error")) {
-            return ResponseEntity.badRequest().body(response);
-        }
+        log.info("⏱️ Asynchronous batch job submission took: {}ms", responseTime);
         
         return ResponseEntity.accepted().body(response);
     }
 
-    @GetMapping("/conversions/async/{jobId}/status")
-    @Operation(summary = "Get status of async job")
-    public ResponseEntity<Map<String, Object>> getAsyncJobStatus(@PathVariable String jobId) {
-        Map<String, Object> response = asyncBatchJobService.getAsyncJobStatus(jobId);
-        
-        if (response.containsKey("error") && "Job not found".equals(response.get("error"))) {
-            return ResponseEntity.notFound().build();
-        }
-        
+    @GetMapping("/conversions/async/{taskId}/status")
+    @Operation(summary = "Get status of asynchronous job by task ID")
+    public ResponseEntity<Map<String, Object>> getAsyncJobStatus(@PathVariable String taskId) {
+        Map<String, Object> response = batchJobService.getAsyncJobStatus(taskId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/conversions/{jobId}/status")
+    @Operation(summary = "Get status of job by job execution ID")
     public ResponseEntity<Map<String, Object>> getJobStatus(@PathVariable Long jobId) {
         Map<String, Object> response = batchJobService.getJobStatus(jobId);
-        
-        if (response.containsKey("error") && "Job not found".equals(response.get("error"))) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        if (response.containsKey("error")) {
-            return ResponseEntity.status(500).body(response);
-        }
-        
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/conversions/jobs")
+    @Operation(summary = "Get all jobs")
     public ResponseEntity<Map<String, Object>> getAllJobs() {
         Map<String, Object> response = batchJobService.getAllJobs();
-        
-        if (response.containsKey("error")) {
-            return ResponseEntity.status(500).body(response);
-        }
-        
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/conversions/jobs/{jobName}")
+    @Operation(summary = "Get jobs by name with pagination")
     public ResponseEntity<Map<String, Object>> getJobsByName(
             @PathVariable String jobName,
             @RequestParam(defaultValue = "0") int page,
@@ -130,56 +104,38 @@ public class CurrencyConversionBatchJobController {
         }
         
         Map<String, Object> response = batchJobService.getJobsByName(jobName, page, size);
-        
-        if (response.containsKey("error")) {
-            return ResponseEntity.status(500).body(response);
-        }
-        
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/conversions/jobs/running")
+    @Operation(summary = "Get currently running jobs")
     public ResponseEntity<Map<String, Object>> getRunningJobs() {
         Map<String, Object> response = batchJobService.getRunningJobs();
-        
-        if (response.containsKey("error")) {
-            return ResponseEntity.status(500).body(response);
-        }
-        
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/conversions/statistics")
+    @Operation(summary = "Get batch job statistics")
     public ResponseEntity<Map<String, Object>> getJobStatistics() {
         Map<String, Object> response = batchJobService.getJobStatistics();
-        
-        if (response.containsKey("error")) {
-            return ResponseEntity.status(500).body(response);
-        }
-        
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/conversions/health")
+    @Operation(summary = "Get batch service health status")
     public ResponseEntity<Map<String, Object>> getBatchHealthStatus() {
         Map<String, Object> response = new java.util.HashMap<>();
         
         try {
             Map<String, Object> runningJobsResponse = batchJobService.getRunningJobs();
-            int runningCount = 0;
-            if (!runningJobsResponse.containsKey("error")) {
-                runningCount = (Integer) runningJobsResponse.get("count");
-            }
+            int runningCount = (Integer) runningJobsResponse.get("count");
             
             Map<String, Object> statsResponse = batchJobService.getJobStatistics();
             
             response.put("status", "UP");
             response.put("runningJobs", runningCount);
             response.put("timestamp", java.time.Instant.now());
-            
-            if (!statsResponse.containsKey("error")) {
-                response.put("totalJobTypes", statsResponse.get("totalJobTypes"));
-            }
+            response.put("totalJobTypes", statsResponse.get("totalJobTypes"));
             
             return ResponseEntity.ok(response);
             
@@ -193,6 +149,7 @@ public class CurrencyConversionBatchJobController {
     }
 
     @GetMapping("/conversions/content-store/stats")
+    @Operation(summary = "Get content store statistics")
     public ResponseEntity<Map<String, Object>> getContentStoreStats() {
         try {
             Map<String, Object> stats = batchJobService.getContentStoreStats();
@@ -206,6 +163,7 @@ public class CurrencyConversionBatchJobController {
     }
 
     @PostMapping("/conversions/content-store/cleanup/{contentKey}")
+    @Operation(summary = "Cleanup specific content by key")
     public ResponseEntity<Map<String, Object>> cleanupSpecificContent(@PathVariable String contentKey) {
         try {
             batchJobService.cleanupJobContent(contentKey);

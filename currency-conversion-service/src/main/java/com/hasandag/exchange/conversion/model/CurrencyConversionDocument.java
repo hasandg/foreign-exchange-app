@@ -19,7 +19,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Document(collection = "currency_conversions")
 @CompoundIndex(name = "idx_timestamp_status", def = "{'timestamp': -1, 'status': 1}")
-@CompoundIndex(name = "idx_user_timestamp", def = "{'user_id': 1, 'timestamp': -1}")
 public class CurrencyConversionDocument {
 
     @Id
@@ -47,11 +46,7 @@ public class CurrencyConversionDocument {
     @Field("timestamp")
     @Indexed
     private LocalDateTime timestamp;
-    
-    @Field("user_id")
-    @Indexed
-    private String userId;
-    
+
     @Field("command_id")
     private String commandId;
     

@@ -1,7 +1,7 @@
 package com.hasandag.exchange.conversion.batch;
 
 import com.hasandag.exchange.common.dto.ConversionRequest;
-import com.hasandag.exchange.conversion.service.FileContentStoreService;
+import com.hasandag.exchange.conversion.service.OptimizedFileContentStoreService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -29,7 +29,7 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
     private static final String CURRENT_ITEM_COUNT_KEY = "csv.reader.current.item.count";
 
     @Autowired
-    private FileContentStoreService fileContentStoreService;
+    private OptimizedFileContentStoreService fileContentStoreService;
 
     private String fileContent;
     private String originalFilename;
@@ -43,7 +43,7 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
         this.contentKey = stepExecution.getJobParameters().getString(FILE_CONTENT_KEY);
         this.originalFilename = stepExecution.getJobParameters().getString(ORIGINAL_FILENAME_KEY);
         
-        // Retrieve content from centralized store using the key
+        // Retrieve content from optimized centralized store using the key
         if (contentKey != null) {
             this.fileContent = fileContentStoreService.getContent(contentKey);
             if (fileContent == null) {
@@ -93,137 +93,83 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
                 log.info("Detected CSV headers for {}: {}", originalFilename, csvParser.getHeaderNames());
             }
 
-            for (int i = 0; i < currentItemCount; i++) {
-                if (recordIterator.hasNext()) {
-                    recordIterator.next();
-                } else {
-                    log.warn("Attempted to skip {} records for restart, but only {} records were available in {}.",
-                            currentItemCount, i, originalFilename);
-                    break;
-                }
+            for (int i = 0; i < currentItemCount && recordIterator.hasNext(); i++) {
+                recordIterator.next();
             }
-            log.info("CSV reader opened for file {}, skipped {} records for restart (if any).", originalFilename, currentItemCount);
+
+            if (currentItemCount > 0) {
+                log.info("Skipped {} records to resume from previous position for file {}", currentItemCount, originalFilename);
+            }
 
         } catch (IOException e) {
-            log.error("Error opening or parsing CSV content for file {}: {}", originalFilename, e.getMessage(), e);
-            throw new ItemStreamException("Error opening CSV file: " + originalFilename, e);
+            log.error("Error opening CSV parser for file {}: {}", originalFilename, e.getMessage(), e);
+            throw new ItemStreamException("Error opening CSV resources for " + originalFilename, e);
         }
     }
 
     @Override
-    public ConversionRequest read() {
+    public ConversionRequest read() throws Exception {
         if (recordIterator == null || !recordIterator.hasNext()) {
+            log.info("CSV reading completed for file {}. Total items processed: {}", originalFilename, currentItemCount);
             return null;
         }
 
-        CSVRecord record;
+        CSVRecord record = null;
         try {
             record = recordIterator.next();
-        } catch (NoSuchElementException e) {
-            log.info("No more CSV records available for file {}", originalFilename);
-            return null;
-        } catch (Exception e) {
             currentItemCount++;
-            log.error("Error fetching next CSV record at line {} for file {}: {}. Record may be malformed.",
-                    currentItemCount, originalFilename, e.getMessage(), e);
-            throw new RuntimeException("Failed to read CSV record due to: " + e.getMessage(), e);
-        }
 
-        currentItemCount++;
-        log.debug("Processing record #{} from {}: {}", currentItemCount, originalFilename, record.toList());
-
-        try {
             Map<String, String> recordMap = record.toMap();
+            log.debug("Processing CSV record #{} in file {}: {}", currentItemCount, originalFilename, recordMap);
 
-            String sourceAmountStr = getValueByPossibleNames(recordMap, "sourceAmount", "amount", "value");
-
-            String sourceCurrencyStr = getValueByPossibleNames(recordMap, "sourceCurrency", "fromCurrency", "from", "source_currency");
-
-            String targetCurrencyStr = getValueByPossibleNames(recordMap, "targetCurrency", "toCurrency", "to", "target_currency");
-
-            if (sourceAmountStr == null && sourceCurrencyStr == null && targetCurrencyStr == null && record.size() >= 3) {
-                log.warn("Header-based mapping failed for record #{} in {}. Attempting indexed mapping. Record: {}",
-                        currentItemCount, originalFilename, record.toList());
-                sourceAmountStr = record.get(0);
-                sourceCurrencyStr = record.get(1);
-                targetCurrencyStr = record.get(2);
-                log.info("Indexed mapping for #{}: amount='{}', src='{}', tgt='{}'",
-                        currentItemCount, sourceAmountStr, sourceCurrencyStr, targetCurrencyStr);
-            }
-
-            if (record.size() == 2 && (sourceCurrencyStr == null || targetCurrencyStr == null)) {
-                log.warn("Record #{} in {} has 2 columns. Attempting to parse potentially malformed data: {}",
-                        currentItemCount, originalFilename, record.toList());
-                String field1 = record.get(0).trim();
-                String field2 = record.get(1).trim();
-
-                if (field1.length() == 6 && field1.matches("[A-Z]{6}")) {
-                    sourceCurrencyStr = field1.substring(0, 3);
-                    targetCurrencyStr = field1.substring(3, 6);
-                    sourceAmountStr = field2;
-                    log.info("Malformed 2-column (concat currencies): src='{}', tgt='{}', amt='{}'",
-                            sourceCurrencyStr, targetCurrencyStr, sourceAmountStr);
-                } else if (field2.length() == 6 && field2.matches("[A-Z]{6}")) {
-                    sourceAmountStr = field1;
-                    sourceCurrencyStr = field2.substring(0, 3);
-                    targetCurrencyStr = field2.substring(3, 6);
-                    log.info("Malformed 2-column (amount, concat currencies): amt='{}', src='{}', tgt='{}'",
-                            sourceAmountStr, sourceCurrencyStr, targetCurrencyStr);
-                }
-            }
+            String sourceAmountStr = getValueByPossibleNames(recordMap, "sourceAmount", "source_amount", "amount", "sourceamount");
+            String sourceCurrency = getValueByPossibleNames(recordMap, "sourceCurrency", "source_currency", "from", "sourcecurrency");
+            String targetCurrency = getValueByPossibleNames(recordMap, "targetCurrency", "target_currency", "to", "targetcurrency");
 
             if (sourceAmountStr == null || sourceAmountStr.trim().isEmpty()) {
-                throw new IllegalArgumentException("Missing or empty sourceAmount");
+                log.error("Missing sourceAmount in record #{} of file {}: {}", currentItemCount, originalFilename, recordMap);
+                throw new IllegalArgumentException("Missing required field 'sourceAmount' in record " + currentItemCount);
             }
-            if (sourceCurrencyStr == null || sourceCurrencyStr.trim().isEmpty()) {
-                throw new IllegalArgumentException("Missing or empty sourceCurrency");
+            if (sourceCurrency == null || sourceCurrency.trim().isEmpty()) {
+                log.error("Missing sourceCurrency in record #{} of file {}: {}", currentItemCount, originalFilename, recordMap);
+                throw new IllegalArgumentException("Missing required field 'sourceCurrency' in record " + currentItemCount);
             }
-            if (targetCurrencyStr == null || targetCurrencyStr.trim().isEmpty()) {
-                throw new IllegalArgumentException("Missing or empty targetCurrency");
+            if (targetCurrency == null || targetCurrency.trim().isEmpty()) {
+                log.error("Missing targetCurrency in record #{} of file {}: {}", currentItemCount, originalFilename, recordMap);
+                throw new IllegalArgumentException("Missing required field 'targetCurrency' in record " + currentItemCount);
             }
 
-            String cleanedAmountStr = sourceAmountStr.trim().replaceAll("[,%$\s]", "");
             BigDecimal sourceAmount;
             try {
-                sourceAmount = new BigDecimal(cleanedAmountStr);
+                sourceAmount = new BigDecimal(sourceAmountStr.trim());
+                if (sourceAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new IllegalArgumentException("Source amount must be positive: " + sourceAmount);
+                }
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("Invalid sourceAmount format: '" + sourceAmountStr + "' (cleaned: '" + cleanedAmountStr + "')", e);
+                log.error("Invalid sourceAmount '{}' in record #{} of file {}: {}", sourceAmountStr, currentItemCount, originalFilename, e.getMessage());
+                throw new IllegalArgumentException("Invalid sourceAmount '" + sourceAmountStr + "' in record " + currentItemCount + ": " + e.getMessage());
             }
 
-            if (sourceAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("sourceAmount must be positive: " + sourceAmount);
-            }
-
-            String cleanedSourceCurrency = sourceCurrencyStr.trim().toUpperCase();
-            String cleanedTargetCurrency = targetCurrencyStr.trim().toUpperCase();
-
-            if (cleanedSourceCurrency.length() != 3) {
-                throw new IllegalArgumentException("Invalid sourceCurrency: '" + sourceCurrencyStr + "'. Must be 3 characters.");
-            }
-            if (cleanedTargetCurrency.length() != 3) {
-                throw new IllegalArgumentException("Invalid targetCurrency: '" + targetCurrencyStr + "'. Must be 3 characters.");
-            }
-
-            if (cleanedSourceCurrency.equals(cleanedTargetCurrency)) {
-                throw new IllegalArgumentException("Source and target currency cannot be the same: " + cleanedSourceCurrency);
-            }
-
-            log.debug("Successfully parsed record #{} for {}: Amount={}, From={}, To={}",
-                    currentItemCount, originalFilename, sourceAmount, cleanedSourceCurrency, cleanedTargetCurrency);
-
-            return ConversionRequest.builder()
+            ConversionRequest request = ConversionRequest.builder()
                     .sourceAmount(sourceAmount)
-                    .sourceCurrency(cleanedSourceCurrency)
-                    .targetCurrency(cleanedTargetCurrency)
+                    .sourceCurrency(sourceCurrency.trim().toUpperCase())
+                    .targetCurrency(targetCurrency.trim().toUpperCase())
                     .build();
 
+            log.debug("✅ Successfully parsed record #{} in file {}: {} {} -> {}", 
+                    currentItemCount, originalFilename, sourceAmount, sourceCurrency, targetCurrency);
+            
+            return request;
+
         } catch (IllegalArgumentException e) {
-            log.error("Error parsing CSV record #{} in file {}: {}. Record: {}",
-                    currentItemCount, originalFilename, e.getMessage(), record.toList());
+            log.error("Validation error in record #{} of file {}: {}", currentItemCount, originalFilename, e.getMessage());
             throw e;
+        } catch (NoSuchElementException e) {
+            log.error("Record structure error in record #{} of file {}: {}", currentItemCount, originalFilename, e.getMessage());
+            throw new IllegalArgumentException("Record structure error in record " + currentItemCount + ": " + e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error processing CSV record #{} in file {}: {}. Record: {}",
-                    currentItemCount, originalFilename, e.getMessage(), record.toList(), e);
+                    currentItemCount, originalFilename, e.getMessage(), record != null ? record.toList() : "null", e);
             throw new RuntimeException("Unexpected error processing record: " + e.getMessage(), e);
         }
     }
@@ -253,7 +199,7 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
                 csvParser.close();
             }
             
-            // Clean up file content from centralized store
+            // Clean up file content from optimized centralized store
             if (contentKey != null) {
                 boolean removed = fileContentStoreService.removeContent(contentKey);
                 if (removed) {

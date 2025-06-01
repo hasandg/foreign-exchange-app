@@ -19,6 +19,40 @@ import java.util.stream.Collectors;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<Object> handleBusinessException(BusinessException ex, WebRequest request) {
+        log.warn("Business exception: {} - {}", ex.getErrorCode(), ex.getMessage());
+        
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", new Date());
+        body.put("status", ex.getHttpStatus().value());
+        body.put("error", ex.getHttpStatus().getReasonPhrase());
+        body.put("errorCode", ex.getErrorCode());
+        body.put("message", ex.getMessage());
+        
+        if (ex.getDetails() != null) {
+            body.put("details", ex.getDetails());
+        }
+        
+        body.put("path", request.getDescription(false).replace("uri=", ""));
+        
+        return new ResponseEntity<>(body, ex.getHttpStatus());
+    }
+
+    @ExceptionHandler(BatchJobException.class)
+    public ResponseEntity<Object> handleBatchJobException(BatchJobException ex, WebRequest request) {
+        log.warn("Batch job exception: {} - {}", ex.getErrorCode(), ex.getMessage());
+        
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", new Date());
+        body.put("status", ex.getHttpStatus().value());
+        body.put("error", ex.getHttpStatus().getReasonPhrase());
+        body.put("errorCode", ex.getErrorCode());
+        body.put("message", ex.getMessage());
+        body.put("path", request.getDescription(false).replace("uri=", ""));
+        
+        return new ResponseEntity<>(body, ex.getHttpStatus());
+    }
 
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<Object> handleNoSuchElementException(NoSuchElementException ex, WebRequest request) {

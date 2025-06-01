@@ -1,327 +1,259 @@
 package com.hasandag.exchange.conversion.service;
 
+import com.hasandag.exchange.conversion.exception.BatchJobException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobInstance;
-import org.springframework.batch.core.StepExecution;
-import org.springframework.batch.core.explore.JobExplorer;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException;
+import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
+import org.springframework.batch.core.repository.JobRestartException;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BatchJobService {
 
-    private final JobExplorer jobExplorer;
-    private final FileContentStoreService fileContentStoreService;
+    private final JobStatusService jobStatusService;
+    private final OptimizedFileContentStoreService fileContentStoreService;
+    
+    private final AtomicLong taskIdGenerator = new AtomicLong(1);
+    private final Map<String, CompletableFuture<Map<String, Object>>> asyncTasks = new ConcurrentHashMap<>();
 
-    public Map<String, Object> getJobStatus(Long jobId) {
-        Map<String, Object> response = new HashMap<>();
-        
+    public Map<String, Object> processJob(MultipartFile file, JobLauncher jobLauncher, Job bulkConversionJob) {
         try {
-            JobExecution jobExecution = jobExplorer.getJobExecution(jobId);
+            validateFile(file);
             
-            if (jobExecution == null) {
-                response.put("error", "Job not found");
-                return response;
-            }
-            
-            response.put("jobId", jobExecution.getId());
-            response.put("jobInstanceId", jobExecution.getJobInstance().getInstanceId());
-            response.put("jobName", jobExecution.getJobInstance().getJobName());
-            response.put("status", jobExecution.getStatus().toString());
-            response.put("startTime", jobExecution.getStartTime());
-            response.put("endTime", jobExecution.getEndTime());
-            response.put("exitStatus", jobExecution.getExitStatus().getExitCode());
-            
-            Map<String, Object> progress = new HashMap<>();
-            for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
-                progress.put("readCount", stepExecution.getReadCount());
-                progress.put("writeCount", stepExecution.getWriteCount());
-                progress.put("commitCount", stepExecution.getCommitCount());
-                progress.put("totalSkipCount", 
-                    stepExecution.getReadSkipCount() + 
-                    stepExecution.getWriteSkipCount() + 
-                    stepExecution.getProcessSkipCount());
-                progress.put("readSkipCount", stepExecution.getReadSkipCount());
-                progress.put("writeSkipCount", stepExecution.getWriteSkipCount());
-                progress.put("processSkipCount", stepExecution.getProcessSkipCount());
-                break; 
-            }
-            response.put("progress", progress);
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving job status for job ID: {}", jobId, e);
-            response.put("error", "Error retrieving job status: " + e.getMessage());
-            return response;
-        }
-    }
-
-    public Map<String, Object> getAllJobs() {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            List<String> jobNames = jobExplorer.getJobNames();
-            List<Map<String, Object>> allJobs = new java.util.ArrayList<>();
-            
-            for (String jobName : jobNames) {
-                List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, 50);
-                
-                for (JobInstance jobInstance : jobInstances) {
-                    List<JobExecution> jobExecutions = jobExplorer.getJobExecutions(jobInstance);
-                    
-                    for (JobExecution jobExecution : jobExecutions) {
-                        Map<String, Object> jobInfo = new HashMap<>();
-                        jobInfo.put("job_execution_id", jobExecution.getId());
-                        jobInfo.put("job_instance_id", jobInstance.getInstanceId());
-                        jobInfo.put("job_name", jobInstance.getJobName());
-                        jobInfo.put("status", jobExecution.getStatus().toString());
-                        jobInfo.put("start_time", jobExecution.getStartTime());
-                        jobInfo.put("end_time", jobExecution.getEndTime());
-                        jobInfo.put("create_time", jobExecution.getCreateTime());
-                        jobInfo.put("exit_code", jobExecution.getExitStatus().getExitCode());
-                        
-                        Map<String, Object> parameters = new HashMap<>();
-                        if (jobExecution.getJobParameters() != null) {
-                            jobExecution.getJobParameters().getParameters().forEach((key, value) -> {
-                                if (!"file.content".equals(key)) {
-                                    parameters.put(key, value.getValue());
-                                }
-                            });
-                        }
-                        jobInfo.put("parameters", parameters);
-                        
-                        allJobs.add(jobInfo);
-                    }
-                }
-            }
-            
-            allJobs.sort((a, b) -> Long.compare(
-                (Long) b.get("job_execution_id"), 
-                (Long) a.get("job_execution_id")
-            ));
-            
-            List<Map<String, Object>> limitedJobs = allJobs.stream()
-                    .limit(50)
-                    .collect(java.util.stream.Collectors.toList());
-            
-            response.put("jobs", limitedJobs);
-            response.put("totalJobs", limitedJobs.size());
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving job list", e);
-            response.put("error", "Error retrieving job list: " + e.getMessage());
-            return response;
-        }
-    }
-
-    public Map<String, Object> processJob(org.springframework.web.multipart.MultipartFile file,
-                                          org.springframework.batch.core.launch.JobLauncher jobLauncher,
-                                          org.springframework.batch.core.Job bulkConversionJob) {
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            if (file.isEmpty()) {
-                response.put("error", "File is empty");
-                return response;
-            }
-
-            if (!isValidFile(file)) {
-                response.put("error", "Invalid file type. Please upload a CSV file.");
-                return response;
-            }
-
             String fileContent = new String(file.getBytes(), "UTF-8");
-            
             String contentKey = fileContentStoreService.generateContentKey(file.getOriginalFilename());
             fileContentStoreService.storeContent(contentKey, fileContent);
             
-            org.springframework.batch.core.JobParameters jobParameters = createJobParameters(file, contentKey);
-
-            log.info("🚀 Submitting job to async launcher in thread: {}", Thread.currentThread().getName());
-            org.springframework.batch.core.JobExecution jobExecution = jobLauncher.run(bulkConversionJob, jobParameters);
-            log.info("⚡ Job submitted - returned from launcher in: {}ms", System.currentTimeMillis() % 10000);
+            JobParameters jobParameters = createJobParameters(file, contentKey);
             
-            response.put("jobId", jobExecution.getJobId());
-            response.put("jobInstanceId", jobExecution.getJobInstance().getInstanceId());
-            response.put("status", jobExecution.getStatus().toString());
-            response.put("message", "Job started asynchronously");
+            log.info("🚀 Submitting synchronous job for file: {}", file.getOriginalFilename());
+            JobExecution jobExecution = jobLauncher.run(bulkConversionJob, jobParameters);
+            log.info("⚡ Synchronous job submitted with ID: {}", jobExecution.getJobId());
+            
+            return buildJobResponse(jobExecution, file, contentKey);
+            
+        } catch (JobExecutionAlreadyRunningException e) {
+            throw BatchJobException.jobAlreadyRunning();
+        } catch (JobRestartException | JobInstanceAlreadyCompleteException e) {
+            throw new BatchJobException(
+                "JOB_RESTART_ERROR",
+                "Job cannot be restarted. This file may have already been processed.",
+                org.springframework.http.HttpStatus.CONFLICT,
+                e
+            );
+        } catch (IOException e) {
+            log.error("File processing error", e);
+            throw new BatchJobException(
+                "FILE_PROCESSING_ERROR",
+                "Error processing uploaded file: " + e.getMessage(),
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                e
+            );
+        } catch (Exception e) {
+            log.error("Unexpected error in batch job", e);
+            throw BatchJobException.executionFailed(e.getMessage(), e);
+        }
+    }
+
+    public Map<String, Object> processJobAsync(MultipartFile file, JobLauncher asyncJobLauncher, Job bulkConversionJob) {
+        try {
+            validateFile(file);
+            
+            String taskId = String.valueOf(taskIdGenerator.getAndIncrement());
+            log.info("🎯 Generated async task ID: {} for file: {}", taskId, file.getOriginalFilename());
+
+            String fileContent = new String(file.getBytes(), "UTF-8");
+            String contentKey = fileContentStoreService.generateContentKey(file.getOriginalFilename());
+            fileContentStoreService.storeContent(contentKey, fileContent);
+
+            CompletableFuture<Map<String, Object>> asyncTask = runJobAsync(file, contentKey, asyncJobLauncher, bulkConversionJob);
+            asyncTasks.put(taskId, asyncTask);
+
+            log.info("⚡ Async task {} submitted for file: {}", taskId, file.getOriginalFilename());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("taskId", taskId);
+            response.put("status", "SUBMITTED");
+            response.put("message", "Job submitted asynchronously");
             response.put("filename", file.getOriginalFilename());
             response.put("fileSize", file.getSize());
             response.put("contentKey", contentKey);
 
-            log.info("✅ Job submitted with ID: {}, Status: {}, File: {}", 
-                    jobExecution.getJobId(), jobExecution.getStatus(), file.getOriginalFilename());
-
             return response;
 
+        } catch (IOException e) {
+            log.error("File processing error", e);
+            throw new BatchJobException(
+                "FILE_PROCESSING_ERROR",
+                "Error processing uploaded file: " + e.getMessage(),
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                e
+            );
         } catch (Exception e) {
-            return handleJobException(e);
+            log.error("Unexpected error in async batch job", e);
+            throw BatchJobException.executionFailed(e.getMessage(), e);
         }
     }
 
-    public Map<String, Object> getJobsByName(String jobName, int page, int size) {
-        Map<String, Object> response = new HashMap<>();
+    public Map<String, Object> getAsyncJobStatus(String taskId) {
+        CompletableFuture<Map<String, Object>> task = asyncTasks.get(taskId);
         
-        try {
-            int start = page * size;
-            List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, start, size);
-            List<Map<String, Object>> jobs = new java.util.ArrayList<>();
-            
-            for (JobInstance jobInstance : jobInstances) {
-                List<JobExecution> jobExecutions = jobExplorer.getJobExecutions(jobInstance);
-                
-                for (JobExecution jobExecution : jobExecutions) {
-                    Map<String, Object> jobInfo = createJobInfoMap(jobExecution, jobInstance);
-                    jobs.add(jobInfo);
-                }
-            }
-            
-            int totalCount = (int) jobExplorer.getJobInstanceCount(jobName);
-            
-            response.put("jobs", jobs);
-            response.put("totalJobs", totalCount);
-            response.put("currentPage", page);
-            response.put("pageSize", size);
-            response.put("totalPages", (int) Math.ceil((double) totalCount / size));
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving jobs by name: {}", jobName, e);
-            response.put("error", "Error retrieving jobs: " + e.getMessage());
-            return response;
+        if (task == null) {
+            throw new BatchJobException(
+                "TASK_NOT_FOUND",
+                "Async task with ID " + taskId + " not found",
+                org.springframework.http.HttpStatus.NOT_FOUND
+            );
         }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("taskId", taskId);
+
+        if (task.isDone()) {
+            try {
+                Map<String, Object> result = task.get();
+                response.putAll(result);
+                asyncTasks.remove(taskId);
+            } catch (Exception e) {
+                response.put("status", "FAILED");
+                response.put("error", e.getMessage());
+                asyncTasks.remove(taskId);
+            }
+        } else {
+            response.put("status", "RUNNING");
+            response.put("message", "Job is still running");
+        }
+
+        return response;
+    }
+
+    public Map<String, Object> getJobStatus(Long jobId) {
+        Map<String, Object> result = jobStatusService.getJobStatus(jobId);
+        
+        if (result.containsKey("error")) {
+            if ("Job not found".equals(result.get("error"))) {
+                throw BatchJobException.jobNotFound(jobId);
+            }
+            throw BatchJobException.executionFailed((String) result.get("error"), null);
+        }
+        
+        return result;
+    }
+
+    public Map<String, Object> getAllJobs() {
+        Map<String, Object> result = jobStatusService.getAllJobs();
+        
+        if (result.containsKey("error")) {
+            throw BatchJobException.executionFailed((String) result.get("error"), null);
+        }
+        
+        return result;
     }
 
     public Map<String, Object> getRunningJobs() {
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> result = jobStatusService.getRunningJobs();
         
-        try {
-            List<String> jobNames = jobExplorer.getJobNames();
-            List<Map<String, Object>> runningJobs = new java.util.ArrayList<>();
-            
-            for (String jobName : jobNames) {
-                Set<JobExecution> runningExecutions = jobExplorer.findRunningJobExecutions(jobName);
-                
-                for (JobExecution jobExecution : runningExecutions) {
-                    Map<String, Object> jobInfo = createJobInfoMap(jobExecution, jobExecution.getJobInstance());
-                    runningJobs.add(jobInfo);
-                }
-            }
-            
-            response.put("runningJobs", runningJobs);
-            response.put("count", runningJobs.size());
-            
-            return response;
-            
-        } catch (Exception e) {
-            log.error("Error retrieving running jobs", e);
-            response.put("error", "Error retrieving running jobs: " + e.getMessage());
-            return response;
+        if (result.containsKey("error")) {
+            throw BatchJobException.executionFailed((String) result.get("error"), null);
         }
+        
+        return result;
     }
 
     public Map<String, Object> getJobStatistics() {
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> result = jobStatusService.getJobStatistics();
         
+        if (result.containsKey("error")) {
+            throw BatchJobException.executionFailed((String) result.get("error"), null);
+        }
+        
+        return result;
+    }
+
+    public Map<String, Object> getJobsByName(String jobName, int page, int size) {
+        Map<String, Object> result = jobStatusService.getJobsByName(jobName, page, size);
+        
+        if (result.containsKey("error")) {
+            throw BatchJobException.executionFailed((String) result.get("error"), null);
+        }
+        
+        return result;
+    }
+
+    public void cleanupJobContent(String contentKey) {
+        fileContentStoreService.removeContent(contentKey);
+    }
+
+    public Map<String, Object> getContentStoreStats() {
+        return fileContentStoreService.getStoreStats();
+    }
+
+    public int cleanupAllContent() {
+        return fileContentStoreService.clearAllContent();
+    }
+
+    // ========== Private Helper Methods ==========
+
+    @Async("taskExecutor")
+    private CompletableFuture<Map<String, Object>> runJobAsync(MultipartFile file, String contentKey, 
+                                                              JobLauncher asyncJobLauncher, Job bulkConversionJob) {
         try {
-            List<String> jobNames = jobExplorer.getJobNames();
-            Map<String, Object> statistics = new HashMap<>();
+            log.info("🔥 Starting async job execution in thread: {} for file: {}", 
+                    Thread.currentThread().getName(), file.getOriginalFilename());
+
+            JobParameters jobParameters = createJobParameters(file, contentKey);
+            JobExecution jobExecution = asyncJobLauncher.run(bulkConversionJob, jobParameters);
+
+            Map<String, Object> result = buildJobResponse(jobExecution, file, contentKey);
             
-            for (String jobName : jobNames) {
-                Map<String, Object> jobStats = new HashMap<>();
-                
-                int totalInstances = (int) jobExplorer.getJobInstanceCount(jobName);
-                jobStats.put("totalInstances", totalInstances);
-                
-                Set<JobExecution> runningExecutions = jobExplorer.findRunningJobExecutions(jobName);
-                jobStats.put("runningCount", runningExecutions.size());
-                
-                List<JobInstance> recentInstances = jobExplorer.getJobInstances(jobName, 0, 100);
-                int completedCount = 0;
-                int failedCount = 0;
-                
-                for (JobInstance instance : recentInstances) {
-                    List<JobExecution> executions = jobExplorer.getJobExecutions(instance);
-                    if (!executions.isEmpty()) {
-                        JobExecution latestExecution = executions.get(executions.size() - 1);
-                        switch (latestExecution.getStatus()) {
-                            case COMPLETED -> completedCount++;
-                            case FAILED -> failedCount++;
-                        }
-                    }
-                }
-                
-                jobStats.put("completedCount", completedCount);
-                jobStats.put("failedCount", failedCount);
-                
-                statistics.put(jobName, jobStats);
-            }
-            
-            response.put("statistics", statistics);
-            response.put("totalJobTypes", jobNames.size());
-            
-            return response;
-            
+            log.info("✅ Async job completed with ID: {}, Status: {}", 
+                    jobExecution.getJobId(), jobExecution.getStatus());
+
+            return CompletableFuture.completedFuture(result);
+
         } catch (Exception e) {
-            log.error("Error retrieving job statistics", e);
-            response.put("error", "Error retrieving job statistics: " + e.getMessage());
-            return response;
+            log.error("Error in async job execution", e);
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("status", "FAILED");
+            errorResult.put("error", e.getMessage());
+            return CompletableFuture.completedFuture(errorResult);
         }
     }
 
-    private Map<String, Object> createJobInfoMap(JobExecution jobExecution, JobInstance jobInstance) {
-        Map<String, Object> jobInfo = new HashMap<>();
-        jobInfo.put("job_execution_id", jobExecution.getId());
-        jobInfo.put("job_instance_id", jobInstance.getInstanceId());
-        jobInfo.put("job_name", jobInstance.getJobName());
-        jobInfo.put("status", jobExecution.getStatus().toString());
-        jobInfo.put("start_time", jobExecution.getStartTime());
-        jobInfo.put("end_time", jobExecution.getEndTime());
-        jobInfo.put("create_time", jobExecution.getCreateTime());
-        jobInfo.put("exit_code", jobExecution.getExitStatus().getExitCode());
-        
-        Map<String, Object> parameters = new HashMap<>();
-        if (jobExecution.getJobParameters() != null) {
-            jobExecution.getJobParameters().getParameters().forEach((key, value) -> {
-                if (!"file.content".equals(key)) {
-                    parameters.put(key, value.getValue());
-                }
-            });
+    private void validateFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw BatchJobException.emptyFile();
         }
-        jobInfo.put("parameters", parameters);
-        
-        Map<String, Object> progress = new HashMap<>();
-        for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
-            progress.put("readCount", stepExecution.getReadCount());
-            progress.put("writeCount", stepExecution.getWriteCount());
-            progress.put("commitCount", stepExecution.getCommitCount());
-            progress.put("skipCount", stepExecution.getSkipCount());
-            break;
+
+        if (!isValidFile(file)) {
+            throw BatchJobException.invalidFileType();
         }
-        jobInfo.put("progress", progress);
-        
-        return jobInfo;
     }
 
-    private boolean isValidFile(org.springframework.web.multipart.MultipartFile file) {
+    private boolean isValidFile(MultipartFile file) {
         String filename = file.getOriginalFilename();
         return filename != null && filename.toLowerCase().endsWith(".csv");
     }
 
-    private org.springframework.batch.core.JobParameters createJobParameters(org.springframework.web.multipart.MultipartFile file, String contentKey) {
-        return new org.springframework.batch.core.JobParametersBuilder()
+    private JobParameters createJobParameters(MultipartFile file, String contentKey) {
+        return new JobParametersBuilder()
                 .addString("file.content.key", contentKey)
                 .addString("original.filename", file.getOriginalFilename())
                 .addLong("file.size", file.getSize())
@@ -329,41 +261,14 @@ public class BatchJobService {
                 .toJobParameters();
     }
 
-    private Map<String, Object> handleJobException(Exception e) {
+    private Map<String, Object> buildJobResponse(JobExecution jobExecution, MultipartFile file, String contentKey) {
         Map<String, Object> response = new HashMap<>();
-        
-        if (e instanceof org.springframework.batch.core.repository.JobExecutionAlreadyRunningException) {
-            response.put("error", "A bulk conversion job is already running. Please wait for it to complete.");
-            response.put("httpStatus", 409);
-        } else if (e instanceof org.springframework.batch.core.repository.JobRestartException || 
-                   e instanceof org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException) {
-            response.put("error", "Job cannot be restarted. This file may have already been processed.");
-            response.put("httpStatus", 409);
-        } else if (e instanceof org.springframework.batch.core.JobParametersInvalidException) {
-            response.put("error", "Invalid job parameters: " + e.getMessage());
-            response.put("httpStatus", 400);
-        } else if (e instanceof java.io.IOException) {
-            log.error("File processing error", e);
-            response.put("error", "Error processing uploaded file: " + e.getMessage());
-            response.put("httpStatus", 500);
-        } else {
-            log.error("Unexpected error in batch job", e);
-            response.put("error", "Unexpected error: " + e.getMessage());
-            response.put("httpStatus", 500);
-        }
-        
+        response.put("jobId", jobExecution.getJobId());
+        response.put("jobInstanceId", jobExecution.getJobInstance().getInstanceId());
+        response.put("status", jobExecution.getStatus().toString());
+        response.put("filename", file.getOriginalFilename());
+        response.put("fileSize", file.getSize());
+        response.put("contentKey", contentKey);
         return response;
-    }
-    
-    public void cleanupJobContent(String contentKey) {
-        fileContentStoreService.removeContent(contentKey);
-    }
-    
-    public Map<String, Object> getContentStoreStats() {
-        return fileContentStoreService.getStoreStats();
-    }
-    
-    public int cleanupAllContent() {
-        return fileContentStoreService.clearAllContent();
     }
 } 

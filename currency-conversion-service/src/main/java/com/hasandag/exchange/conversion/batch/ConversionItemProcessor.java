@@ -9,46 +9,54 @@ import com.hasandag.exchange.conversion.repository.query.CurrencyConversionPostg
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.item.ItemProcessor;
+import org.springframework.lang.NonNull;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
+import java.util.UUID;
 
-@RequiredArgsConstructor
 @Slf4j
+@RequiredArgsConstructor
 public class ConversionItemProcessor implements ItemProcessor<ConversionRequest, ConversionResponse> {
 
     private final ExchangeRateFeignClient exchangeRateFeignClient;
+    private final CurrencyConversionPostgresRepository postgresRepository; 
     private final CurrencyConversionMongoRepository mongoRepository;
-    private final CurrencyConversionPostgresRepository postgresRepository;
 
     @Override
-    public ConversionResponse process(ConversionRequest request) {
-        String transactionId = generateTransactionId(request);
-        
+    public ConversionResponse process(@NonNull ConversionRequest request) throws Exception {
+        String transactionId = "BATCH-" + UUID.randomUUID();
+        log.debug("Processing request for transaction ID {}: {}", transactionId, request);
+
         if (mongoRepository != null && mongoRepository.existsByTransactionId(transactionId)) {
-            log.debug("Skipping duplicate in Write Model (MongoDB): {}", transactionId);
-            return null;
+            log.warn("Duplicate transaction ID (MongoDB): {}", transactionId);
+            return null; 
         }
-        
         if (mongoRepository == null && postgresRepository.existsByTransactionId(transactionId)) {
-            log.debug("Skipping duplicate in Read Model (PostgreSQL - fallback): {}", transactionId);
-            return null;
+             log.warn("Duplicate transaction ID (PostgreSQL): {}", transactionId);
+             return null; 
         }
 
         try {
+            log.info("Fetching exchange rate for {} to {}", request.getSourceCurrency(), request.getTargetCurrency());
             ExchangeRateResponse rateResponse = exchangeRateFeignClient.getExchangeRate(
                     request.getSourceCurrency(),
                     request.getTargetCurrency());
+
+            if (rateResponse == null || rateResponse.getRate() == null) {
+                log.error("Failed to fetch exchange rate for {} -> {}. Rate response was null or rate was null.", 
+                    request.getSourceCurrency(), request.getTargetCurrency());
+                throw new RuntimeException("Exchange rate not found or service unavailable.");
+            }
+            
+            log.info("Successfully fetched exchange rate: {}", rateResponse.getRate());
 
             BigDecimal targetAmount = request.getSourceAmount()
                     .multiply(rateResponse.getRate())
                     .setScale(2, RoundingMode.HALF_UP);
 
-            return ConversionResponse.builder()
+            ConversionResponse response = ConversionResponse.builder()
                     .transactionId(transactionId)
                     .sourceCurrency(request.getSourceCurrency())
                     .targetCurrency(request.getTargetCurrency())
@@ -57,38 +65,16 @@ public class ConversionItemProcessor implements ItemProcessor<ConversionRequest,
                     .exchangeRate(rateResponse.getRate())
                     .timestamp(LocalDateTime.now())
                     .build();
+            
+            log.info("Processed conversion for transaction ID {}: {} {} -> {} {} (Rate: {})", 
+                transactionId, request.getSourceAmount(), request.getSourceCurrency(), 
+                targetAmount, request.getTargetCurrency(), rateResponse.getRate());
+            return response;
 
         } catch (Exception e) {
-            log.error("Error processing conversion for transaction {}: {}", transactionId, e.getMessage());
-            throw e;
-        }
-    }
-
-    private String generateTransactionId(ConversionRequest request) {
-        try {
-            String requestString = String.format("%s-%s-%s", 
-                    request.getSourceCurrency(),
-                    request.getTargetCurrency(),
-                    request.getSourceAmount().toString());
-
-            LocalDateTime now = LocalDateTime.now();
-            String timeComponent = String.format("%04d%02d%02d%02d%02d",
-                    now.getYear(), now.getMonthValue(), now.getDayOfMonth(),
-                    now.getHour(), now.getMinute());
-
-            String combinedString = requestString + "-" + timeComponent;
-
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] hashBytes = md.digest(combinedString.getBytes());
-            return "BATCH-" + HexFormat.of().formatHex(hashBytes).substring(0, 16).toUpperCase();
-
-        } catch (NoSuchAlgorithmException e) {
-            log.warn("MD5 not available, using fallback transaction ID generation");
-            return String.format("BATCH-%s-%s-%s-%d",
-                    request.getSourceCurrency(),
-                    request.getTargetCurrency(),
-                    request.getSourceAmount().toString().replace(".", ""),
-                    System.currentTimeMillis() / 60000);
+            log.error("Error during conversion processing for request {}: {}. Transaction ID: {}", 
+                request, e.getMessage(), transactionId, e);
+            throw e; 
         }
     }
 } 

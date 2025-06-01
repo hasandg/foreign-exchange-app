@@ -4,6 +4,21 @@ server:
 spring:
   application:
     name: exchange-rate-service
+  threads:
+    virtual:
+      enabled: true
+  task:
+    execution:
+      pool:
+        core-size: 5
+        max-size: 20
+        queue-capacity: 100
+        keep-alive: 60s
+        virtual-threads: true
+      thread-name-prefix: "async-task-"
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
   data:
     redis:
       host: ${SPRING_REDIS_HOST:redis}
@@ -33,8 +48,8 @@ spring:
 logging:
   level:
     com.hasandag: INFO
-    org.springframework.web.reactive.function.client: INFO
-    org.springframework.data.redis: INFO
+    org.springframework.web: INFO
+    org.apache.hc: INFO
 
 springdoc:
   api-docs:
@@ -53,3 +68,9 @@ exchange:
     read-timeout: 10s
     write-timeout: 10s
     response-timeout: 15s
+
+external-services:
+  virtual-threads:
+    enabled: true
+    pool-size: 50
+    timeout: 30s

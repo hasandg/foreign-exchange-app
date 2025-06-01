@@ -5,39 +5,42 @@ import com.hasandag.exchange.common.dto.ConversionResponse;
 import com.hasandag.exchange.conversion.batch.ConversionItemProcessor;
 import com.hasandag.exchange.conversion.batch.ConversionItemWriter;
 import com.hasandag.exchange.conversion.batch.CsvConversionItemReader;
-import com.hasandag.exchange.conversion.batch.JobCompletionNotificationListener;
 import com.hasandag.exchange.conversion.batch.CurrencyConversionMongoItemWriter;
 import com.hasandag.exchange.conversion.batch.CurrencyConversionPostgresItemWriter;
 import com.hasandag.exchange.conversion.client.ExchangeRateFeignClient;
 import com.hasandag.exchange.conversion.repository.command.CurrencyConversionMongoRepository;
 import com.hasandag.exchange.conversion.repository.query.CurrencyConversionPostgresRepository;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.core.launch.support.TaskExecutorJobLauncher;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.client.HttpStatusCodeException;
-import feign.FeignException;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
+@EnableAsync
 @Slf4j
 @RequiredArgsConstructor
 public class BatchConfiguration {
@@ -83,13 +86,11 @@ public class BatchConfiguration {
             ItemReader<ConversionRequest> reader,
             ItemProcessor<ConversionRequest, ConversionResponse> processor,
             ItemWriter<ConversionResponse> writer,
-            @Qualifier("batchTaskExecutor") TaskExecutor taskExecutor,
             @Value("${conversion.batch.chunk-size:100}") int chunkSize,
             @Value("${conversion.batch.skip-limit:1000}") int skipLimit,
             @Value("${conversion.batch.retry-limit:3}") int retryLimit) {
 
-        log.info("Configuring conversionCsvProcessingStep with chunkSize={}, skipLimit={}, retryLimit={}",
-                chunkSize, skipLimit, retryLimit);
+        log.warn("CONFIGURING STEP with chunkSize={}, skipLimit={}, retryLimit={}", chunkSize, skipLimit, retryLimit);
 
         return new StepBuilder("conversionCsvProcessingStep", jobRepository)
                 .<ConversionRequest, ConversionResponse>chunk(chunkSize, transactionManager)
@@ -104,7 +105,6 @@ public class BatchConfiguration {
                 .retry(FeignException.class)
                 .retry(HttpStatusCodeException.class)
                 .noRetry(OptimisticLockingFailureException.class)
-                .taskExecutor(taskExecutor)
                 .build();
     }
 
@@ -119,22 +119,36 @@ public class BatchConfiguration {
     }
 
     @Bean
-    @Qualifier("batchTaskExecutor")
-    public TaskExecutor batchTaskExecutor(
-            @Value("${conversion.batch.task-executor.core-pool-size:2}") int corePoolSize,
-            @Value("${conversion.batch.task-executor.max-pool-size:4}") int maxPoolSize,
-            @Value("${conversion.batch.task-executor.queue-capacity:100}") int queueCapacity,
-            @Value("${conversion.batch.task-executor.thread-name-prefix:csv-batch-}") String threadNamePrefix) {
+    @Qualifier("asyncJobLauncher")
+    @Primary
+    public JobLauncher asyncJobLauncher() throws Exception {
+        TaskExecutorJobLauncher jobLauncher = new TaskExecutorJobLauncher();
+        jobLauncher.setJobRepository(jobRepository);
+        jobLauncher.setTaskExecutor(batchTaskExecutor());
+        
+        jobLauncher.afterPropertiesSet();
+        
+        log.warn("✅ Configured ASYNC JobLauncher as PRIMARY - jobs will return immediately");
+        log.warn("✅ Using TaskExecutor: {} with core pool size: 2", batchTaskExecutor().getClass().getSimpleName());
+        
+        return jobLauncher;
+    }
 
-        log.info("Configuring batchTaskExecutor: corePoolSize={}, maxPoolSize={}, queueCapacity={}, threadNamePrefix={}",
-                corePoolSize, maxPoolSize, queueCapacity, threadNamePrefix);
-
+    @Bean
+    public TaskExecutor batchTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(corePoolSize);
-        executor.setMaxPoolSize(maxPoolSize);
-        executor.setQueueCapacity(queueCapacity);
-        executor.setThreadNamePrefix(threadNamePrefix);
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("batch-async-");
+        
+        executor.setDaemon(false);
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+        
         executor.initialize();
+        
+        log.warn("✅ Configured TaskExecutor - core: 2, max: 4, queue: 100, daemon: false");
         return executor;
     }
 } 

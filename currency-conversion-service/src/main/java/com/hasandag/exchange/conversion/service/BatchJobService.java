@@ -19,6 +19,7 @@ import java.util.Set;
 public class BatchJobService {
 
     private final JobExplorer jobExplorer;
+    private final FileContentStoreService fileContentStoreService;
 
     public Map<String, Object> getJobStatus(Long jobId) {
         Map<String, Object> response = new HashMap<>();
@@ -142,18 +143,25 @@ public class BatchJobService {
 
             String fileContent = new String(file.getBytes(), "UTF-8");
             
-            org.springframework.batch.core.JobParameters jobParameters = createJobParameters(file, fileContent);
+            String contentKey = fileContentStoreService.generateContentKey(file.getOriginalFilename());
+            fileContentStoreService.storeContent(contentKey, fileContent);
+            
+            org.springframework.batch.core.JobParameters jobParameters = createJobParameters(file, contentKey);
 
+            log.info("🚀 Submitting job to async launcher in thread: {}", Thread.currentThread().getName());
             org.springframework.batch.core.JobExecution jobExecution = jobLauncher.run(bulkConversionJob, jobParameters);
+            log.info("⚡ Job submitted - returned from launcher in: {}ms", System.currentTimeMillis() % 10000);
+            
             response.put("jobId", jobExecution.getJobId());
             response.put("jobInstanceId", jobExecution.getJobInstance().getInstanceId());
             response.put("status", jobExecution.getStatus().toString());
-            response.put("message", "Job started");
+            response.put("message", "Job started asynchronously");
             response.put("filename", file.getOriginalFilename());
             response.put("fileSize", file.getSize());
+            response.put("contentKey", contentKey);
 
-            log.info("Batch job started: {}, File: {}", 
-                    jobExecution.getJobId(), file.getOriginalFilename());
+            log.info("✅ Job submitted with ID: {}, Status: {}, File: {}", 
+                    jobExecution.getJobId(), jobExecution.getStatus(), file.getOriginalFilename());
 
             return response;
 
@@ -312,9 +320,9 @@ public class BatchJobService {
         return filename != null && filename.toLowerCase().endsWith(".csv");
     }
 
-    private org.springframework.batch.core.JobParameters createJobParameters(org.springframework.web.multipart.MultipartFile file, String fileContent) {
+    private org.springframework.batch.core.JobParameters createJobParameters(org.springframework.web.multipart.MultipartFile file, String contentKey) {
         return new org.springframework.batch.core.JobParametersBuilder()
-                .addString("file.content", fileContent)
+                .addString("file.content.key", contentKey)
                 .addString("original.filename", file.getOriginalFilename())
                 .addLong("file.size", file.getSize())
                 .addLong("timestamp", System.currentTimeMillis())
@@ -345,5 +353,17 @@ public class BatchJobService {
         }
         
         return response;
+    }
+    
+    public void cleanupJobContent(String contentKey) {
+        fileContentStoreService.removeContent(contentKey);
+    }
+    
+    public Map<String, Object> getContentStoreStats() {
+        return fileContentStoreService.getStoreStats();
+    }
+    
+    public int cleanupAllContent() {
+        return fileContentStoreService.clearAllContent();
     }
 } 

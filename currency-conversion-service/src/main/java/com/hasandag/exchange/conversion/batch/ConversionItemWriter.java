@@ -27,7 +27,10 @@ public class ConversionItemWriter implements ItemWriter<ConversionResponse> {
 
     @Override
     public void write(@NonNull Chunk<? extends ConversionResponse> chunk) throws Exception {
-        log.info("Writing a chunk of {} conversion responses", chunk.size());
+        log.warn("🔴 CHUNK PROCESSING - Writing a chunk of {} conversion responses", chunk.size());
+        log.warn("🔴 CHUNK PROCESSING - This proves chunking is working! Chunk size: {}", chunk.size());
+        log.warn("🔴 CHUNK PROCESSING - Items in this chunk: {}", chunk.getItems().size());
         compositeWriter.write(chunk);
+        log.warn("🔴 CHUNK PROCESSING - Successfully completed writing chunk of {} items", chunk.size());
     }
 } 

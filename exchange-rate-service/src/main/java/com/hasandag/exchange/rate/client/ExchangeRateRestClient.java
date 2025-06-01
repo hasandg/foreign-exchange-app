@@ -26,7 +26,7 @@ public class ExchangeRateRestClient {
     private final int maxAttempts = 3;
     private final long backoffDelayMs = 1000;
 
-    public ExchangeRateRestClient(@Qualifier("exchangeRateRestClient") RestClient restClient,
+    public ExchangeRateRestClient(@Qualifier("exchangeRateApiRestClient") RestClient restClient,
                                  @Qualifier("externalServiceExecutor") Executor virtualThreadExecutor) {
         this.restClient = restClient;
         this.virtualThreadExecutor = virtualThreadExecutor;

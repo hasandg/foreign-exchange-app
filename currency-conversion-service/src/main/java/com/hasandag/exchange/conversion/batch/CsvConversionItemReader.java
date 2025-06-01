@@ -1,6 +1,7 @@
 package com.hasandag.exchange.conversion.batch;
 
 import com.hasandag.exchange.common.dto.ConversionRequest;
+import com.hasandag.exchange.conversion.service.FileContentStoreService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -11,6 +12,7 @@ import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemStream;
 import org.springframework.batch.item.ItemStreamException;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -22,22 +24,36 @@ import java.util.NoSuchElementException;
 @Slf4j
 public class CsvConversionItemReader implements ItemReader<ConversionRequest>, ItemStream {
 
-    private static final String FILE_CONTENT_KEY = "file.content";
+    private static final String FILE_CONTENT_KEY = "file.content.key";
     private static final String ORIGINAL_FILENAME_KEY = "original.filename";
     private static final String CURRENT_ITEM_COUNT_KEY = "csv.reader.current.item.count";
 
+    @Autowired
+    private FileContentStoreService fileContentStoreService;
+
     private String fileContent;
     private String originalFilename;
+    private String contentKey;
     private CSVParser csvParser;
     private Iterator<CSVRecord> recordIterator;
     private int currentItemCount = 0;
 
     @BeforeStep
     public void beforeStep(StepExecution stepExecution) {
-        this.fileContent = stepExecution.getJobParameters().getString(FILE_CONTENT_KEY);
+        this.contentKey = stepExecution.getJobParameters().getString(FILE_CONTENT_KEY);
         this.originalFilename = stepExecution.getJobParameters().getString(ORIGINAL_FILENAME_KEY);
-        log.info("CsvConversionItemReader initialized for file: {}. Content length: {}",
-                originalFilename, (fileContent != null ? fileContent.length() : 0));
+        
+        // Retrieve content from centralized store using the key
+        if (contentKey != null) {
+            this.fileContent = fileContentStoreService.getContent(contentKey);
+            if (fileContent == null) {
+                log.error("File content not found in store for key: {}", contentKey);
+                log.error("Available store stats: {}", fileContentStoreService.getStoreStats());
+            }
+        }
+        
+        log.info("CsvConversionItemReader initialized for file: {}. Content key: {}, Content length: {}",
+                originalFilename, contentKey, (fileContent != null ? fileContent.length() : 0));
     }
 
     @Override
@@ -236,6 +252,17 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
             if (csvParser != null) {
                 csvParser.close();
             }
+            
+            // Clean up file content from centralized store
+            if (contentKey != null) {
+                boolean removed = fileContentStoreService.removeContent(contentKey);
+                if (removed) {
+                    log.info("Successfully cleaned up file content from store for key: {}", contentKey);
+                } else {
+                    log.warn("Failed to cleanup content for key: {} (may have been already removed)", contentKey);
+                }
+            }
+            
             log.info("CsvConversionItemReader closed for file {}. Processed {} items.", originalFilename, currentItemCount);
         } catch (IOException e) {
             log.error("Error closing CSV parser for file {}: {}", originalFilename, e.getMessage(), e);

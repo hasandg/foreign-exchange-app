@@ -1,5 +1,6 @@
 package com.hasandag.exchange.conversion.controller;
 
+import com.hasandag.exchange.conversion.service.AsyncBatchJobService;
 import com.hasandag.exchange.conversion.service.BatchJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,13 +30,21 @@ public class CurrencyConversionBatchJobController {
     private final JobLauncher jobLauncher;
     private final Job bulkConversionJob;
     private final BatchJobService batchJobService;
+    private final AsyncBatchJobService asyncBatchJobService;
 
     @PostMapping(value = "/conversions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Start bulk conversion job")
+    @Operation(summary = "Start bulk conversion job (legacy - waits for job start)")
     public ResponseEntity<Map<String, Object>> startBulkConversionJob(
             @Parameter(description = "CSV file", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE))
             @RequestParam("file") MultipartFile file) {
+        
+        log.info("🚀 Starting LEGACY batch job with JobLauncher: {}", jobLauncher.getClass().getSimpleName());
+        long startTime = System.currentTimeMillis();
+        
         Map<String, Object> response = batchJobService.processJob(file, jobLauncher, bulkConversionJob);
+        
+        long responseTime = System.currentTimeMillis() - startTime;
+        log.info("⏱️ Legacy batch job submission took: {}ms", responseTime);
         
         if (response.containsKey("error")) {
             Integer httpStatus = (Integer) response.get("httpStatus");
@@ -44,6 +53,39 @@ public class CurrencyConversionBatchJobController {
                 return ResponseEntity.status(httpStatus).body(response);
             }
             return ResponseEntity.badRequest().body(response);
+        }
+        
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping(value = "/conversions/async", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Start bulk conversion job asynchronously (returns immediately)")
+    public ResponseEntity<Map<String, Object>> startAsyncBulkConversionJob(
+            @Parameter(description = "CSV file", content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE))
+            @RequestParam("file") MultipartFile file) {
+        
+        log.info("⚡ Starting TRUE ASYNC batch job");
+        long startTime = System.currentTimeMillis();
+        
+        Map<String, Object> response = asyncBatchJobService.processJobAsync(file, bulkConversionJob);
+        
+        long responseTime = System.currentTimeMillis() - startTime;
+        log.info("🚀 Async batch job submission took: {}ms (should be ~50-100ms)", responseTime);
+        
+        if (response.containsKey("error")) {
+            return ResponseEntity.badRequest().body(response);
+        }
+        
+        return ResponseEntity.accepted().body(response);
+    }
+
+    @GetMapping("/conversions/async/{jobId}/status")
+    @Operation(summary = "Get status of async job")
+    public ResponseEntity<Map<String, Object>> getAsyncJobStatus(@PathVariable String jobId) {
+        Map<String, Object> response = asyncBatchJobService.getAsyncJobStatus(jobId);
+        
+        if (response.containsKey("error") && "Job not found".equals(response.get("error"))) {
+            return ResponseEntity.notFound().build();
         }
         
         return ResponseEntity.ok(response);
@@ -147,6 +189,35 @@ public class CurrencyConversionBatchJobController {
             response.put("error", e.getMessage());
             response.put("timestamp", java.time.Instant.now());
             return ResponseEntity.status(503).body(response);
+        }
+    }
+
+    @GetMapping("/conversions/content-store/stats")
+    public ResponseEntity<Map<String, Object>> getContentStoreStats() {
+        try {
+            Map<String, Object> stats = batchJobService.getContentStoreStats();
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            log.error("Error retrieving content store stats", e);
+            Map<String, Object> errorResponse = new java.util.HashMap<>();
+            errorResponse.put("error", "Error retrieving content store stats: " + e.getMessage());
+            return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
+    @PostMapping("/conversions/content-store/cleanup/{contentKey}")
+    public ResponseEntity<Map<String, Object>> cleanupSpecificContent(@PathVariable String contentKey) {
+        try {
+            batchJobService.cleanupJobContent(contentKey);
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("message", "Content cleanup initiated for key: " + contentKey);
+            response.put("timestamp", java.time.Instant.now());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error cleaning up content for key: {}", contentKey, e);
+            Map<String, Object> errorResponse = new java.util.HashMap<>();
+            errorResponse.put("error", "Error cleaning up content: " + e.getMessage());
+            return ResponseEntity.status(500).body(errorResponse);
         }
     }
 } 

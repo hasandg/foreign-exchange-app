@@ -131,7 +131,6 @@ conversion:
   exchange-rate-service:
     url: ${EXCHANGE_RATE_SERVICE_URL:http://exchange-rate-service:8083}
   batch:
-    size: 1000
     chunk-size: 100
     skip-limit: 1000
     job:

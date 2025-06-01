@@ -10,6 +10,9 @@ import org.springframework.batch.item.ItemWriter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.lang.NonNull;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Slf4j
 @RequiredArgsConstructor
 @ConditionalOnBean(CurrencyConversionMongoRepository.class)
@@ -19,6 +22,10 @@ public class CurrencyConversionMongoItemWriter implements ItemWriter<ConversionR
 
     @Override
     public void write(@NonNull Chunk<? extends ConversionResponse> chunk) throws Exception {
+        log.warn("📊 MONGO WRITER - Received chunk with {} items", chunk.size());
+        
+        List<CurrencyConversionDocument> documents = new ArrayList<>();
+        
         for (ConversionResponse response : chunk.getItems()) {
             if (response == null) {
                 continue;
@@ -26,14 +33,23 @@ public class CurrencyConversionMongoItemWriter implements ItemWriter<ConversionR
             
             try {
                 CurrencyConversionDocument mongoDocument = mapToMongoDocument(response);
-                mongoRepository.save(mongoDocument);
-                log.debug("Saved to MongoDB: {}", response.getTransactionId());
+                documents.add(mongoDocument);
+                log.debug("Prepared MongoDB document: {}", response.getTransactionId());
             } catch (Exception e) {
-                log.error("Error saving to MongoDB for transaction ID {}: {}", response.getTransactionId(), e.getMessage(), e);
+                log.error("Error preparing MongoDB document for transaction ID {}: {}", response.getTransactionId(), e.getMessage(), e);
                 throw e;
             }
         }
-        log.info("Successfully saved {} items to MongoDB", chunk.size());
+        
+        if (!documents.isEmpty()) {
+            try {
+                mongoRepository.saveAll(documents);
+                log.warn("✅ MONGO WRITER - Successfully batch saved {} items to MongoDB (chunk size: {})", documents.size(), chunk.size());
+            } catch (Exception e) {
+                log.error("❌ MONGO WRITER - Error batch saving to MongoDB: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to batch save to MongoDB", e);
+            }
+        }
     }
 
     private CurrencyConversionDocument mapToMongoDocument(ConversionResponse response) {

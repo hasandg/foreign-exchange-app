@@ -20,6 +20,7 @@ public class CurrencyConversionPostgresItemWriter implements ItemWriter<Conversi
 
     @Override
     public void write(@NonNull Chunk<? extends ConversionResponse> chunk) throws Exception {
+        log.warn("📊 POSTGRES WRITER - Received chunk with {} items", chunk.size());
         List<CurrencyConversionEntity> entities = new ArrayList<>();
         
         for (ConversionResponse response : chunk.getItems()) {
@@ -32,9 +33,9 @@ public class CurrencyConversionPostgresItemWriter implements ItemWriter<Conversi
         if (!entities.isEmpty()) {
             try {
                 postgresRepository.saveAll(entities);
-                log.info("Successfully saved {} items to PostgreSQL", entities.size());
+                log.warn("✅ POSTGRES WRITER - Successfully saved {} items to PostgreSQL (chunk size: {})", entities.size(), chunk.size());
             } catch (Exception e) {
-                log.error("Error batch saving to PostgreSQL: {}", e.getMessage(), e);
+                log.error("❌ POSTGRES WRITER - Error batch saving to PostgreSQL: {}", e.getMessage(), e);
                 throw new RuntimeException("Failed to save batch to PostgreSQL", e);
             }
         }

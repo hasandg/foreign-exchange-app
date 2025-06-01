@@ -34,7 +34,7 @@ public class RestClientConfig {
         this.responseTimeout = responseTimeout;
     }
 
-    @Bean("exchangeRateRestClient")
+    @Bean("exchangeRateApiRestClient")
     public RestClient exchangeRateRestClient(@Value("${exchange.api.url}") String baseUrl) {
         log.info("Creating RestClient for exchange rate API with base URL: {}", baseUrl);
         

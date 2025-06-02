@@ -22,8 +22,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "currency_conversions", indexes = {
-    @Index(name = "idx_transaction_id", columnList = "transactionId", unique = true),
-    @Index(name = "idx_timestamp", columnList = "timestamp")
+    @Index(name = "idx_transaction_id", columnList = "transactionId", unique = true)
 })
 @Getter
 @Setter

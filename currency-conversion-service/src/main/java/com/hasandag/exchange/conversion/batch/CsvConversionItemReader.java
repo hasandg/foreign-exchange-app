@@ -43,7 +43,6 @@ public class CsvConversionItemReader implements ItemReader<ConversionRequest>, I
         this.contentKey = stepExecution.getJobParameters().getString(FILE_CONTENT_KEY);
         this.originalFilename = stepExecution.getJobParameters().getString(ORIGINAL_FILENAME_KEY);
         
-        // Retrieve content from optimized centralized store using the key
         if (contentKey != null) {
             this.fileContent = fileContentStoreService.getContent(contentKey);
             if (fileContent == null) {

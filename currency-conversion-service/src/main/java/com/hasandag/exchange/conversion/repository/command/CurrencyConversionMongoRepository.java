@@ -12,6 +12,5 @@ import java.util.Optional;
 public interface CurrencyConversionMongoRepository extends MongoRepository<CurrencyConversionDocument, String> {
     
     Optional<CurrencyConversionDocument> findByTransactionId(String transactionId);
-    
-    boolean existsByTransactionId(String transactionId);
-} 
+
+}

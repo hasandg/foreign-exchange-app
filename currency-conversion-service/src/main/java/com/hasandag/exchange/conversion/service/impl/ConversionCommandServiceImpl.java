@@ -75,10 +75,6 @@ public class ConversionCommandServiceImpl implements ConversionCommandService {
         }
         
         try {
-            if (mongoRepository.existsByTransactionId(transactionId)) {
-                log.debug("Transaction already exists in Write Model: {}", transactionId);
-                return mongoRepository.findByTransactionId(transactionId).orElseThrow();
-            }
             
             CurrencyConversionDocument document = CurrencyConversionDocument.builder()
                     .transactionId(transactionId)

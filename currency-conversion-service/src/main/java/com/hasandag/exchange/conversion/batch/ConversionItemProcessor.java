@@ -29,15 +29,6 @@ public class ConversionItemProcessor implements ItemProcessor<ConversionRequest,
         String transactionId = "BATCH-" + UUID.randomUUID();
         log.debug("Processing request for transaction ID {}: {}", transactionId, request);
 
-        if (mongoRepository != null && mongoRepository.existsByTransactionId(transactionId)) {
-            log.warn("Duplicate transaction ID (MongoDB): {}", transactionId);
-            return null; 
-        }
-        if (mongoRepository == null && postgresRepository.existsByTransactionId(transactionId)) {
-             log.warn("Duplicate transaction ID (PostgreSQL): {}", transactionId);
-             return null; 
-        }
-
         try {
             log.info("Fetching exchange rate for {} to {}", request.getSourceCurrency(), request.getTargetCurrency());
             ExchangeRateResponse rateResponse = exchangeRateFeignClient.getExchangeRate(

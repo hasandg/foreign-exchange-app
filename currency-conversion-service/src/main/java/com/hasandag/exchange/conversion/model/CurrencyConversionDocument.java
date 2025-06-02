@@ -3,6 +3,7 @@ package com.hasandag.exchange.conversion.model;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -13,19 +14,17 @@ import org.springframework.data.mongodb.core.mapping.Field;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Data
+@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "currency_conversions")
-@CompoundIndex(name = "idx_timestamp_status", def = "{'timestamp': -1, 'status': 1}")
 public class CurrencyConversionDocument {
 
     @Id
     private String id;
 
     @Field("transaction_id")
-    @Indexed(unique = true)
     private String transactionId;
 
     @Field("source_currency")
@@ -55,5 +54,5 @@ public class CurrencyConversionDocument {
     
     @Field("status")
     @Indexed
-    private String status = "COMPLETED"; // PENDING, COMPLETED, FAILED
+    private String status = "COMPLETED";
 } 
